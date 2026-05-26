@@ -15,7 +15,9 @@ class Settings(BaseSettings):
     DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://gripper_app:gripper_secure@localhost:5432/gripper")
     SUPERUSER_DATABASE_URL: str = os.getenv(
         "SUPERUSER_DATABASE_URL",
-        os.getenv(
+        os.getenv("DATABASE_URL", "postgresql://gripper_app:gripper_secure@localhost:5432/gripper")
+        if "supabase.co" in os.getenv("DATABASE_URL", "")
+        else os.getenv(
             "DATABASE_URL",
             "postgresql://gripper_app:gripper_secure@localhost:5432/gripper",
         ).replace("gripper_app:gripper_secure", "civicpulse:civicpulse"),

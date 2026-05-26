@@ -12,13 +12,16 @@ from pydantic import BaseModel
 from typing import List, Optional
 from jose import jwt, JWTError
 
-from .db.session import get_db
+from .db.session import get_db, _engine_kwargs
 from .db.seed import seed_default_data, DEFAULT_INSTITUTIONS
 from . import models
 from .api.endpoints import router as api_router
 from app.api.auth import router as auth_router, get_superuser_session
 from app.api.deps import get_current_user, RoleChecker
+from app.core.database_url import database_url_error_hint
 from app.core.config import settings
+from sqlalchemy import create_engine, text
+from sqlalchemy.exc import OperationalError
 
 SWAGGER_OPENAPI_URL = os.getenv("SWAGGER_OPENAPI_URL", "/openapi.json")
 public_bearer = HTTPBearer(auto_error=False)
@@ -74,6 +77,23 @@ def root():
 @app.get("/health")
 def health_check():
     return {"status": "healthy", "service": "gripper-backend"}
+
+
+@app.get("/health/db")
+def health_db_check():
+    try:
+        engine = create_engine(
+            settings.DATABASE_URL,
+            **_engine_kwargs(settings.DATABASE_URL),
+        )
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return {"status": "ok", "database": "connected"}
+    except OperationalError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=database_url_error_hint(settings.DATABASE_URL, exc),
+        ) from exc
 
 @app.post("/institutions")
 def create_institution(name: str, slug: str, db: Session = Depends(get_db)):

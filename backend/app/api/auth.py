@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy import text, create_engine
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy import create_engine
+from sqlalchemy.exc import IntegrityError, OperationalError
 from pydantic import BaseModel, EmailStr, validator
 import uuid
 import random
@@ -11,7 +11,8 @@ from typing import Optional
 from datetime import datetime
 from jose import jwt, JWTError
 
-from app.db.session import get_db
+from app.db.session import _engine_kwargs
+from app.core.database_url import database_url_error_hint
 from app import models
 from app.core import security
 from app.core.config import settings
@@ -26,7 +27,10 @@ _super_session_factory = None
 def get_superuser_session():
     global _super_engine, _super_session_factory
     if _super_engine is None:
-        _super_engine = create_engine(settings.SUPERUSER_DATABASE_URL, pool_pre_ping=True)
+        _super_engine = create_engine(
+            settings.SUPERUSER_DATABASE_URL,
+            **_engine_kwargs(settings.SUPERUSER_DATABASE_URL),
+        )
         _super_session_factory = sessionmaker(bind=_super_engine)
     return _super_session_factory()
 
@@ -57,27 +61,7 @@ class Token(BaseModel):
     graduation_year: Optional[int] = None
 
 @router.post("/register", status_code=201)
-def register_user(user_in: UserRegister, db: Session = Depends(get_db)):
-    # Check email uniqueness with superuser so RLS cannot hide existing accounts.
-    with get_superuser_session() as super_db:
-        existing_user = super_db.query(models.User).filter(models.User.email == user_in.email).first()
-        if existing_user:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="A user with this email is already registered.",
-            )
-
-        institution = (
-            super_db.query(models.Institution)
-            .filter(models.Institution.id == user_in.institution_id)
-            .first()
-        )
-    if not institution:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Specified institution not found.",
-        )
-
+def register_user(user_in: UserRegister):
     valid_roles = ["analyst", "sector_lead", "pm", "faculty", "trustee", "admin"]
     if user_in.role not in valid_roles:
         raise HTTPException(
@@ -88,31 +72,51 @@ def register_user(user_in: UserRegister, db: Session = Depends(get_db)):
     hashed_pwd = security.get_password_hash(user_in.password)
     v_code = "".join(random.choices(string.digits, k=6))
 
-    db_user = models.User(
-        email=user_in.email,
-        hashed_password=hashed_pwd,
-        institution_id=user_in.institution_id,
-        role=user_in.role,
-        graduation_year=user_in.graduation_year,
-        is_verified=False,
-        verification_code=v_code,
-    )
-    db.add(db_user)
-
     try:
-        db.execute(
-            text("SET LOCAL app.current_institution_id = :inst_id"),
-            {"inst_id": str(user_in.institution_id)},
-        )
-        db.flush()
+        with get_superuser_session() as super_db:
+            existing_user = super_db.query(models.User).filter(models.User.email == user_in.email).first()
+            if existing_user:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="A user with this email is already registered.",
+                )
+
+            institution = (
+                super_db.query(models.Institution)
+                .filter(models.Institution.id == user_in.institution_id)
+                .first()
+            )
+            if not institution:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Specified institution not found. Run database migrations/seeding first.",
+                )
+
+            db_user = models.User(
+                email=user_in.email,
+                hashed_password=hashed_pwd,
+                institution_id=user_in.institution_id,
+                role=user_in.role,
+                graduation_year=user_in.graduation_year,
+                is_verified=False,
+                verification_code=v_code,
+            )
+            super_db.add(db_user)
+            super_db.commit()
+            super_db.refresh(db_user)
+    except HTTPException:
+        raise
     except IntegrityError:
-        db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="A user with this email is already registered.",
         )
+    except OperationalError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=database_url_error_hint(settings.SUPERUSER_DATABASE_URL, exc),
+        ) from exc
     except Exception as exc:
-        db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Registration failed: {exc}",
@@ -130,8 +134,14 @@ def register_user(user_in: UserRegister, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=Token)
 def login_user(credentials: UserLogin):
-    with get_superuser_session() as super_db:
-        db_user = super_db.query(models.User).filter(models.User.email == credentials.email).first()
+    try:
+        with get_superuser_session() as super_db:
+            db_user = super_db.query(models.User).filter(models.User.email == credentials.email).first()
+    except OperationalError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=database_url_error_hint(settings.SUPERUSER_DATABASE_URL, exc),
+        ) from exc
     
     if not db_user or not db_user.hashed_password:
         raise HTTPException(
