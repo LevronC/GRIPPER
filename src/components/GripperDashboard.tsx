@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   LayoutDashboard, 
   ShieldAlert, 
@@ -18,7 +18,13 @@ import {
   LogOut,
   Lock,
   Mail,
-  UserPlus
+  UserPlus,
+  ShieldCheck,
+  ChevronRight,
+  Fingerprint,
+  Zap,
+  Activity,
+  History
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import type { Holding, Violation } from '../store/useStore';
@@ -75,12 +81,13 @@ export default function GripperDashboard() {
   const [newCostBasis, setNewCostBasis] = useState(100);
 
   // Auth local state
-  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [authMode, setAuthMode] = useState<'login' | 'register' | 'verify'>('login');
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [authInstId, setAuthInstId] = useState('');
   const [authRole, setAuthRole] = useState('analyst');
   const [authGradYear, setAuthGradYear] = useState<number | ''>('');
+  const [authCode, setAuthCode] = useState('');
   const [authError, setAuthError] = useState('');
   const [authSuccess, setAuthSuccess] = useState('');
 
@@ -125,17 +132,20 @@ export default function GripperDashboard() {
     setAuthError('');
     setAuthSuccess('');
 
-    if (!authInstId) {
-      setAuthError('Please select an institution context.');
-      return;
-    }
-
     if (authMode === 'login') {
+      if (!authInstId) {
+        setAuthError('Please select an institution context.');
+        return;
+      }
       const ok = await login(authEmail, authPassword, authInstId);
       if (!ok) {
-        setAuthError('Invalid credentials. Check your password or institution selection.');
+        setAuthError('Invalid credentials. Check your password, verification status, or institution selection.');
       }
-    } else {
+    } else if (authMode === 'register') {
+      if (!authInstId) {
+        setAuthError('Please select an institution context.');
+        return;
+      }
       const res = await register(
         authEmail, 
         authPassword, 
@@ -144,11 +154,29 @@ export default function GripperDashboard() {
         authGradYear === '' ? undefined : authGradYear
       );
       if (res.success) {
-        setAuthSuccess('Registration successful! Please log in.');
-        setAuthMode('login');
-        setAuthPassword('');
+        setAuthSuccess('Registration successful! Check your .edu email for the verification code.');
+        setAuthMode('verify');
       } else {
-        setAuthError(res.error || 'Registration failed. Make sure the email is unique.');
+        setAuthError(res.error || 'Registration failed. Make sure the email ends in .edu and is unique.');
+      }
+    } else {
+      // Verification mode
+      try {
+        const res = await fetch('http://localhost:8000/auth/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: authEmail, code: authCode })
+        });
+        if (res.ok) {
+          setAuthSuccess('Verification successful! You can now log in.');
+          setAuthMode('login');
+          setAuthPassword('');
+        } else {
+          const data = await res.json();
+          setAuthError(data.detail || 'Verification failed.');
+        }
+      } catch (err) {
+        setAuthError('Network error during verification.');
       }
     }
   };
@@ -272,166 +300,187 @@ export default function GripperDashboard() {
     if (sev === 'critical') {
       return 'bg-red-500/10 text-red-400 border-red-500/25';
     }
-    return 'bg-amber-500/10 text-amber-400 border-amber-500/25';
+    return 'bg-cyan-500/10 text-cyan-400 border-cyan-500/25';
   };
 
   // AUTH SCREEN COMPONENT
   if (!token) {
     return (
-      <div className="flex min-h-screen w-full items-center justify-center bg-[#070A13] font-sans text-slate-100 relative overflow-hidden">
-        {/* Glowing background highlights */}
-        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-blue-500/10 blur-[120px]" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] rounded-full bg-indigo-500/10 blur-[120px]" />
+      <div className="flex min-h-screen w-full items-center justify-center bg-[#05070A] font-sans text-slate-100 relative overflow-hidden">
+        {/* Glowing background highlights inspired by high-end dashboards */}
+        <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] rounded-full bg-cyan-600/10 blur-[150px]" />
+        <div className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] rounded-full bg-blue-600/10 blur-[150px]" />
 
         <motion.div 
-          initial={{ opacity: 0, y: 30 }} 
-          animate={{ opacity: 1, y: 0 }} 
-          transition={{ duration: 0.5 }}
-          className="w-full max-w-md bg-[#0C101F]/80 backdrop-blur-xl border border-slate-800 p-8 rounded-3xl shadow-2xl shadow-blue-900/10 space-y-6 z-10"
+          initial={{ opacity: 0, scale: 0.95 }} 
+          animate={{ opacity: 1, scale: 1 }} 
+          transition={{ duration: 0.4 }}
+          className="w-full max-w-[420px] bg-[#0A0D14]/90 backdrop-blur-3xl border border-white/5 p-10 rounded-[2.5rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.6)] z-10"
         >
           {/* Logo and title */}
-          <div className="text-center space-y-2">
-            <div className="mx-auto w-12 h-12 bg-gradient-to-tr from-blue-600 to-indigo-600 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/20">
-              <Cpu size={24} />
-            </div>
-            <h2 className="text-2xl font-extrabold tracking-tight bg-gradient-to-r from-slate-100 to-slate-300 bg-clip-text text-transparent">
-              GRIPPER RISK TERMINAL
+          <div className="text-center mb-10">
+            <motion.div 
+              whileHover={{ rotate: 180 }}
+              transition={{ duration: 0.8 }}
+              className="mx-auto w-16 h-16 bg-gradient-to-tr from-cyan-500 to-blue-600 rounded-3xl flex items-center justify-center shadow-[0_0_30px_-5px_rgba(34,211,238,0.3)] mb-6"
+            >
+              <Fingerprint size={32} className="text-white" />
+            </motion.div>
+            <h2 className="text-3xl font-black tracking-tighter text-white mb-2">
+              GRIPPER<span className="text-cyan-400 font-normal">.terminal</span>
             </h2>
-            <p className="text-xs text-slate-400 font-medium uppercase tracking-widest">
-              Multi-Tenant Investment Compliance
+            <p className="text-xs text-slate-500 font-medium uppercase tracking-[0.2em]">
+              Security & Compliance Vault
             </p>
           </div>
 
           {/* Form */}
-          <form onSubmit={handleAuthSubmit} className="space-y-4">
-            {/* Institution dropdown */}
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                <Building size={12} className="text-slate-500" />
-                Select Institution Tenant
-              </label>
-              {institutions.length > 0 ? (
-                <select
-                  value={authInstId}
-                  onChange={(e) => setAuthInstId(e.target.value)}
-                  className="w-full bg-slate-900/80 border border-slate-800 rounded-xl py-2 px-3 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
+          <form onSubmit={handleAuthSubmit} className="space-y-5">
+            <AnimatePresence mode="wait">
+              {authMode !== 'verify' ? (
+                <motion.div
+                  key="main-auth"
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 10 }}
+                  className="space-y-4"
                 >
-                  {institutions.map((inst) => (
-                    <option key={inst.id} value={inst.id}>
-                      {inst.name} ({inst.slug.toUpperCase()})
-                    </option>
-                  ))}
-                </select>
+                  {/* Institution dropdown */}
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 px-1">
+                      <Building size={12} className="text-cyan-500/70" />
+                      Infrastructure Node
+                    </label>
+                    <select
+                      value={authInstId}
+                      onChange={(e) => setAuthInstId(e.target.value)}
+                      className="w-full bg-white/[0.03] border border-white/10 rounded-2xl py-3 px-4 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all appearance-none cursor-pointer"
+                    >
+                      {institutions.map((inst) => (
+                        <option key={inst.id} value={inst.id} className="bg-[#0A0D14]">
+                          {inst.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Email input */}
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 px-1">
+                      <Mail size={12} className="text-cyan-500/70" />
+                      Academic ID (.edu)
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      value={authEmail}
+                      onChange={(e) => setAuthEmail(e.target.value)}
+                      placeholder="analyst@stetson.edu"
+                      className="w-full bg-white/[0.03] border border-white/10 rounded-2xl py-3 px-4 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all"
+                    />
+                  </div>
+
+                  {/* Password input */}
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 px-1">
+                      <Lock size={12} className="text-cyan-500/70" />
+                      Encryption Key
+                    </label>
+                    <input
+                      type="password"
+                      required
+                      value={authPassword}
+                      onChange={(e) => setAuthPassword(e.target.value)}
+                      placeholder="••••••••••••"
+                      className="w-full bg-white/[0.03] border border-white/10 rounded-2xl py-3 px-4 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all"
+                    />
+                  </div>
+
+                  {authMode === 'register' && (
+                    <motion.div 
+                      initial={{ opacity: 0, height: 0 }} 
+                      animate={{ opacity: 1, height: 'auto' }} 
+                      className="space-y-4 pt-1"
+                    >
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 px-1">
+                          <UserPlus size={12} className="text-cyan-500/70" />
+                          Clearance Level
+                        </label>
+                        <select
+                          value={authRole}
+                          onChange={(e) => setAuthRole(e.target.value)}
+                          className="w-full bg-white/[0.03] border border-white/10 rounded-2xl py-3 px-4 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 appearance-none transition-all cursor-pointer"
+                        >
+                          <option value="analyst" className="bg-[#0A0D14]">Research Analyst</option>
+                          <option value="sector_lead" className="bg-[#0A0D14]">Sector Lead</option>
+                          <option value="pm" className="bg-[#0A0D14]">Portfolio Manager (PM)</option>
+                          <option value="admin" className="bg-[#0A0D14]">Systems Administrator</option>
+                        </select>
+                      </div>
+                    </motion.div>
+                  )}
+                </motion.div>
               ) : (
-                <div className="h-9 animate-pulse bg-slate-800 rounded-xl"></div>
+                <motion.div
+                  key="verify-auth"
+                  initial={{ opacity: 0, x: 10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -10 }}
+                  className="space-y-4"
+                >
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 px-1">
+                      <ShieldCheck size={12} className="text-cyan-500/70" />
+                      Verification Code
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      maxLength={6}
+                      value={authCode}
+                      onChange={(e) => setAuthCode(e.target.value)}
+                      placeholder="000000"
+                      className="w-full bg-white/[0.03] border border-white/10 rounded-2xl py-4 px-4 text-center text-2xl font-black tracking-[0.5em] text-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all"
+                    />
+                    <p className="text-[10px] text-center text-slate-500 mt-2">
+                      Enter the 6-digit code sent to your .edu account.
+                    </p>
+                  </div>
+                </motion.div>
               )}
-            </div>
+            </AnimatePresence>
 
-            {/* Email input */}
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                <Mail size={12} className="text-slate-500" />
-                Corporate Email
-              </label>
-              <input
-                type="email"
-                required
-                value={authEmail}
-                onChange={(e) => setAuthEmail(e.target.value)}
-                placeholder="analyst@stetson.edu"
-                className="w-full bg-slate-900/80 border border-slate-800 rounded-xl py-2 px-3 text-xs text-slate-200 placeholder-slate-650 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
-              />
-            </div>
-
-            {/* Password input */}
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                <Lock size={12} className="text-slate-500" />
-                Security Password
-              </label>
-              <input
-                type="password"
-                required
-                value={authPassword}
-                onChange={(e) => setAuthPassword(e.target.value)}
-                placeholder="••••••••••••"
-                className="w-full bg-slate-900/80 border border-slate-800 rounded-xl py-2 px-3 text-xs text-slate-200 placeholder-slate-650 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
-              />
-            </div>
-
-            {/* Registration specific fields */}
-            {authMode === 'register' && (
-              <motion.div 
-                initial={{ opacity: 0, height: 0 }} 
-                animate={{ opacity: 1, height: 'auto' }} 
-                className="space-y-4 pt-1"
-              >
-                {/* Role select */}
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                    <UserPlus size={12} className="text-slate-500" />
-                    Analyst Role
-                  </label>
-                  <select
-                    value={authRole}
-                    onChange={(e) => setAuthRole(e.target.value)}
-                    className="w-full bg-slate-900/80 border border-slate-800 rounded-xl py-2 px-3 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
-                  >
-                    <option value="analyst">Research Analyst</option>
-                    <option value="sector_lead">Sector Lead</option>
-                    <option value="pm">Portfolio Manager (PM)</option>
-                    <option value="admin">Systems Administrator</option>
-                  </select>
-                </div>
-
-                {/* Graduation Year */}
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                    Graduation Cohort Year (Optional)
-                  </label>
-                  <input
-                    type="number"
-                    value={authGradYear}
-                    onChange={(e) => setAuthGradYear(e.target.value === '' ? '' : parseInt(e.target.value))}
-                    placeholder="2027"
-                    className="w-full bg-slate-900/80 border border-slate-800 rounded-xl py-2 px-3 text-xs text-slate-200 placeholder-slate-650 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
-                  />
-                </div>
+            {authError && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-4 bg-red-500/5 border border-red-500/20 text-red-400 rounded-2xl text-[11px] font-medium leading-relaxed">
+                {authError}
               </motion.div>
             )}
 
-            {/* Error Banner */}
-            {authError && (
-              <div className="p-3 bg-red-950/20 border border-red-900/40 text-red-400 rounded-xl text-xs">
-                {authError}
-              </div>
-            )}
-
-            {/* Success Banner */}
             {authSuccess && (
-              <div className="p-3 bg-emerald-950/20 border border-emerald-800/40 text-emerald-400 rounded-xl text-xs">
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-4 bg-cyan-500/5 border border-cyan-500/20 text-cyan-400 rounded-2xl text-[11px] font-medium leading-relaxed">
                 {authSuccess}
-              </div>
+              </motion.div>
             )}
 
-            {/* Submit */}
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 text-white rounded-xl text-xs font-bold transition shadow shadow-blue-500/10 cursor-pointer flex items-center justify-center gap-1.5"
+              className="w-full py-4 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 disabled:opacity-50 text-white rounded-2xl text-sm font-black tracking-wide transition-all shadow-[0_20px_40px_-10px_rgba(8,145,178,0.3)] cursor-pointer flex items-center justify-center gap-3 active:scale-[0.98]"
             >
               {isLoading ? (
-                <span>Verifying credentials...</span>
-              ) : authMode === 'login' ? (
-                <>Sign In to Workspace</>
+                <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               ) : (
-                <>Register Analyst Account</>
+                <>
+                  {authMode === 'login' ? 'ESTABLISH LINK' : authMode === 'register' ? 'CREATE SECURE NODE' : 'VERIFY IDENTITY'}
+                  <ChevronRight size={18} />
+                </>
               )}
             </button>
           </form>
 
           {/* Switcher */}
-          <div className="text-center pt-2">
+          <div className="text-center mt-8">
             <button
               type="button"
               onClick={() => {
@@ -439,11 +488,11 @@ export default function GripperDashboard() {
                 setAuthError('');
                 setAuthSuccess('');
               }}
-              className="text-xs text-slate-400 hover:text-slate-200 underline font-medium transition-colors"
+              className="text-[11px] text-slate-500 hover:text-cyan-400 font-bold tracking-wider transition-colors uppercase"
             >
               {authMode === 'login' 
-                ? "Don't have an account? Register here" 
-                : 'Already registered? Log in here'}
+                ? "Request New Access Node" 
+                : 'Already have credentials? Link Hub'}
             </button>
           </div>
         </motion.div>
@@ -453,59 +502,55 @@ export default function GripperDashboard() {
 
   // MAIN DASHBOARD LAYOUT
   return (
-    <div className="flex h-screen bg-[#080B13] font-sans text-slate-100 overflow-hidden">
-      {/* Sidebar Switcher & Navigation */}
-      <aside className="w-72 bg-[#0C101F] border-r border-slate-800 p-6 flex flex-col z-10 select-none">
+    <div className="flex h-screen bg-[#05070A] font-sans text-slate-200 overflow-hidden">
+      {/* Sidebar Navigation */}
+      <aside className="w-80 bg-[#0A0D14]/80 backdrop-blur-3xl border-r border-white/5 p-8 flex flex-col z-20">
         
         {/* Title */}
-        <div className="text-xl font-bold tracking-wider mb-6 flex items-center gap-2">
-          <div className="bg-gradient-to-tr from-blue-600 to-indigo-600 text-white p-2 rounded-xl shadow-lg shadow-blue-500/10">
-            <Cpu size={20} className="text-white" />
+        <div className="flex items-center gap-3 mb-10 group">
+          <div className="bg-gradient-to-tr from-cyan-500 to-blue-600 p-2.5 rounded-[1rem] shadow-[0_0_20px_-5px_rgba(34,211,238,0.2)]">
+            <Fingerprint size={22} className="text-white" />
           </div>
-          <span className="bg-gradient-to-r from-slate-100 to-slate-300 bg-clip-text text-transparent">GRIPPER</span>
-          <span className="text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded-full font-mono font-bold tracking-tight">v1.2</span>
+          <div>
+            <h1 className="text-xl font-black tracking-tighter text-white group-hover:text-cyan-400 transition-colors">GRIPPER</h1>
+            <p className="text-[9px] text-slate-500 font-black tracking-[0.3em] uppercase opacity-60">Security Terminal</p>
+          </div>
         </div>
 
-        {/* Institutional Tenant Switcher */}
-        <div className="mb-8 bg-slate-900/50 p-3 rounded-xl border border-slate-800 space-y-2">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-            <Building size={12} className="text-slate-500" />
-            Institutional Context
-          </span>
-          {institutions.length > 0 ? (
-            <select
-              value={currentInstitution?.id || ''}
-              onChange={(e) => {
-                const selected = institutions.find(inst => inst.id === e.target.value);
-                if (selected) setInstitution(selected);
-              }}
-              className="w-full bg-[#0F172A] border border-slate-800 rounded-lg py-1.5 px-2 text-xs font-semibold text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            >
-              {institutions.map(inst => (
-                <option key={inst.id} value={inst.id}>
-                  {inst.name}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <div className="h-7 animate-pulse bg-slate-800 rounded-lg"></div>
-          )}
+        {/* Tenant Status */}
+        <div className="mb-10 p-5 bg-white/[0.02] border border-white/5 rounded-3xl space-y-4">
+          <div className="flex justify-between items-center">
+            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+              <Zap size={12} className="text-cyan-500/70" />
+              Active Context
+            </span>
+            <div className="h-2 w-2 rounded-full bg-cyan-400 animate-pulse" />
+          </div>
+          
+          <div className="space-y-1">
+            <h3 className="text-sm font-black text-white truncate">{currentInstitution?.name}</h3>
+            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">{currentPortfolio?.name || 'Loading Portfolio...'}</p>
+          </div>
 
-          {currentPortfolio && (
-            <div className="pt-2 border-t border-slate-850 flex justify-between items-center text-[10px]">
-              <span className="text-slate-500">Active Fund:</span>
-              <span className="font-mono text-slate-300 font-bold truncate max-w-[120px]">{currentPortfolio.name}</span>
+          <div className="pt-4 border-t border-white/5 flex items-center justify-between">
+            <div className="flex flex-col">
+              <span className="text-[9px] text-slate-600 font-black uppercase">Graduation Year</span>
+              <span className="text-xs font-mono font-bold text-slate-300">{currentUser?.graduation_year || 'N/A'}</span>
             </div>
-          )}
+            <div className="flex flex-col items-end text-right">
+              <span className="text-[9px] text-slate-600 font-black uppercase">Clearance</span>
+              <span className="text-xs font-mono font-bold text-cyan-400 uppercase">{currentUser?.role}</span>
+            </div>
+          </div>
         </div>
 
         {/* Nav Tabs */}
-        <nav className="flex-1 space-y-1.5">
+        <nav className="flex-1 space-y-2">
           {[
-            { id: 'Dashboard', label: 'Governance Center', icon: LayoutDashboard },
-            { id: 'Portfolio', label: 'Portfolio & Exposures', icon: Scale },
-            { id: 'SEC Ingestion', label: 'SEC Ingestion Hub', icon: Upload },
-            { id: 'Institutional Memory', label: 'Institutional Memory', icon: Search }
+            { id: 'Dashboard', label: 'Compliance Hub', icon: Activity },
+            { id: 'Portfolio', label: 'Portfolio Matrix', icon: Scale },
+            { id: 'SEC Ingestion', label: 'Ingestion Pipeline', icon: Upload },
+            { id: 'Institutional Memory', label: 'Neural Search', icon: Search }
           ].map((item) => {
             const isActive = activeTab === item.id;
             const Icon = item.icon;
@@ -513,159 +558,128 @@ export default function GripperDashboard() {
               <button
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 border ${
+                className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl font-bold text-[13px] tracking-wide transition-all duration-300 border ${
                   isActive 
-                    ? 'bg-blue-600/10 text-blue-400 border-blue-500/20 shadow-lg shadow-blue-500/5' 
-                    : 'text-slate-400 border-transparent hover:bg-slate-900/50 hover:text-slate-200'
+                    ? 'bg-cyan-500/5 text-cyan-400 border-cyan-500/20 shadow-[0_10px_20px_-10px_rgba(34,211,238,0.1)]' 
+                    : 'text-slate-500 border-transparent hover:bg-white/[0.03] hover:text-slate-300'
                 }`}
               >
-                <Icon size={16} className={isActive ? 'text-blue-400' : 'text-slate-500'} />
+                <Icon size={18} className={isActive ? 'text-cyan-400' : 'text-slate-600'} />
                 {item.label}
               </button>
             );
           })}
         </nav>
 
-        {/* Footer Analyst Bio & Log Out */}
-        <div className="mt-auto pt-6 border-t border-slate-850 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-3 overflow-hidden">
-            <div className="h-9 w-9 shrink-0 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 flex items-center justify-center font-bold text-sm text-white shadow-md">
-              {currentUser?.email.slice(0, 2).toUpperCase() || 'AN'}
-            </div>
-            <div className="truncate">
-              <h5 className="text-xs font-bold text-slate-200 truncate">{currentUser?.email}</h5>
-              <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider truncate">
-                Role: {currentUser?.role}
-              </p>
-            </div>
+        {/* User Badge */}
+        <div className="mt-auto pt-8 border-t border-white/5 flex items-center gap-4 group">
+          <div className="h-12 w-12 shrink-0 rounded-[1.25rem] bg-gradient-to-tr from-cyan-600 to-blue-600 flex items-center justify-center font-black text-lg text-white shadow-xl shadow-cyan-900/10">
+            {currentUser?.email.slice(0, 1).toUpperCase() || 'G'}
+          </div>
+          <div className="flex-1 min-w-0">
+            <h5 className="text-xs font-black text-white truncate group-hover:text-cyan-400 transition-colors">{currentUser?.email}</h5>
+            <p className="text-[10px] text-slate-500 font-black tracking-widest uppercase mt-0.5">Verified Academic</p>
           </div>
           <button 
             onClick={logout}
-            title="Log Out"
-            className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-800 hover:border-slate-700 transition"
+            className="p-2.5 rounded-xl bg-white/[0.03] hover:bg-red-500/10 text-slate-600 hover:text-red-400 border border-white/5 hover:border-red-500/20 transition-all cursor-pointer"
           >
-            <LogOut size={14} />
+            <LogOut size={16} />
           </button>
         </div>
       </aside>
 
-      {/* Main Terminal Viewport */}
-      <main className="flex-1 overflow-y-auto p-8 relative flex flex-col bg-[#070A13]">
-        
-        {/* Top Header Controls */}
-        <header className="flex justify-between items-center mb-8 border-b border-slate-850 pb-5">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-100">{activeTab}</h1>
-            <p className="text-xs text-slate-500 mt-1 font-semibold uppercase tracking-wider">
-              {currentInstitution?.name} &bull; {currentPortfolio?.name} ({currentPortfolio?.strategy_type} Strategy)
-            </p>
+      {/* Main Terminal Content */}
+      <main className="flex-1 overflow-y-auto p-12 relative bg-[#05070A]">
+        {/* Header Section */}
+        <header className="flex justify-between items-end mb-12">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="h-1.5 w-1.5 rounded-full bg-cyan-400" />
+              <p className="text-[10px] text-cyan-400/70 font-black uppercase tracking-[0.3em]">Grid Access Verified</p>
+            </div>
+            <h1 className="text-4xl font-black tracking-tighter text-white">{activeTab}</h1>
           </div>
 
-          <div className="flex gap-3">
-            {currentPortfolio && (
-              <button
-                onClick={() => evaluateCompliance(currentPortfolio.id, currentInstitution!.id)}
-                disabled={isLoading}
-                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl text-xs font-bold tracking-wide transition-colors flex items-center gap-2 cursor-pointer shadow-md disabled:opacity-50"
-              >
-                <Database size={13} className="text-blue-400" />
-                Run Compliance Check
-              </button>
-            )}
+          <div className="flex gap-4">
+            <button
+              onClick={() => evaluateCompliance(currentPortfolio!.id, currentInstitution!.id)}
+              disabled={isLoading}
+              className="px-6 py-3.5 bg-white/[0.03] hover:bg-white/[0.08] border border-white/10 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all flex items-center gap-3 cursor-pointer disabled:opacity-50 active:scale-95"
+            >
+              <History size={14} className="text-cyan-400" />
+              Execute Compliance Audit
+            </button>
           </div>
         </header>
 
-        {/* Viewport Content */}
-        <div className="flex-1 max-w-6xl w-full mx-auto space-y-8">
-          
-          {/* TAB 1: GOVERNANCE CENTER */}
+        {/* Tab Content Rendering */}
+        <div className="max-w-7xl mx-auto">
           {activeTab === 'Dashboard' && (
-            <motion.div 
-              initial={{ opacity: 0, y: 15 }} 
-              animate={{ opacity: 1, y: 0 }} 
-              className="space-y-6"
-            >
-              {/* Summary Stats Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="bg-[#0C1020] border border-slate-800 p-5 rounded-2xl">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Compliance Score</span>
-                  <div className="flex items-baseline gap-2 mt-2">
-                    <span className="text-3xl font-black font-mono text-emerald-400">{complianceScore}%</span>
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
+              {/* Stats Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                {[
+                  { label: 'Integrity Index', value: `${complianceScore}%`, color: 'text-cyan-400', bg: 'bg-cyan-500' },
+                  { label: 'System Breaches', value: activeAlertsCount, color: activeAlertsCount > 0 ? 'text-red-400' : 'text-slate-400', bg: 'bg-red-500' },
+                  { label: 'Neutralized Risks', value: resolvedViolations.length, color: 'text-emerald-400', bg: 'bg-emerald-500' },
+                  { label: 'Portfolio Weight', value: `${(totalHoldingsWeight * 100).toFixed(0)}%`, color: 'text-white', bg: 'bg-blue-500' }
+                ].map((stat, i) => (
+                  <div key={i} className="bg-[#0A0D14] border border-white/5 p-8 rounded-[2rem] space-y-4">
+                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">{stat.label}</span>
+                    <div className="text-4xl font-black tracking-tighter transition-colors font-mono">{stat.value}</div>
+                    <div className="w-full bg-white/5 h-1.5 rounded-full overflow-hidden">
+                      <div className={`${stat.bg} h-full transition-all duration-700`} style={{ width: typeof stat.value === 'string' ? stat.value : `${Math.min(100, (Number(stat.value)/10)*100)}%` }} />
+                    </div>
                   </div>
-                  <div className="w-full bg-slate-800 h-1.5 rounded-full mt-3 overflow-hidden">
-                    <div className="bg-emerald-400 h-full transition-all duration-500" style={{ width: `${complianceScore}%` }} />
-                  </div>
-                </div>
-
-                <div className="bg-[#0C1020] border border-slate-800 p-5 rounded-2xl">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Active Violations</span>
-                  <div className="flex items-baseline gap-2 mt-2">
-                    <span className={`text-3xl font-black font-mono ${activeAlertsCount > 0 ? 'text-red-400' : 'text-slate-400'}`}>
-                      {activeAlertsCount}
-                    </span>
-                  </div>
-                  <p className="text-[10px] text-slate-500 mt-2 font-medium">Requires RAG validation reports</p>
-                </div>
-
-                <div className="bg-[#0C1020] border border-slate-800 p-5 rounded-2xl">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Resolved Exceptions</span>
-                  <div className="flex items-baseline gap-2 mt-2">
-                    <span className="text-3xl font-black font-mono text-emerald-400">{resolvedViolations.length}</span>
-                  </div>
-                  <p className="text-[10px] text-slate-500 mt-2 font-medium">Permanently archived in audit trail</p>
-                </div>
-
-                <div className="bg-[#0C1020] border border-slate-800 p-5 rounded-2xl">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Portfolio Assets</span>
-                  <div className="flex items-baseline gap-2 mt-2">
-                    <span className="text-3xl font-black font-mono text-slate-350">{holdings.length}</span>
-                    <span className="text-xs text-slate-500 font-mono">/ {(totalHoldingsWeight * 100).toFixed(0)}% weight</span>
-                  </div>
-                  <p className="text-[10px] text-slate-500 mt-2 font-medium">Aggregated across all tickers</p>
-                </div>
+                ))}
               </div>
 
-              {/* Main dashboard splits */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                
-                {/* Active Alerts List */}
-                <div className="lg:col-span-2 bg-[#0C1020] border border-slate-800 rounded-2xl p-6 space-y-4">
-                  <h3 className="text-sm font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
-                    <ShieldAlert size={16} className="text-red-400" />
-                    Active IPS Governance Breaches
-                  </h3>
+              {/* Main Sections */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div className="lg:col-span-2 bg-[#0A0D14] border border-white/5 rounded-[2.5rem] p-10 space-y-8">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-black text-white tracking-tight flex items-center gap-3">
+                      <ShieldAlert size={20} className="text-red-500" />
+                      Active Governance Breaches
+                    </h3>
+                  </div>
                   
                   {violations.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-16 border border-dashed border-slate-800 rounded-xl space-y-3 bg-slate-900/10">
-                      <CheckCircle size={32} className="text-emerald-500" />
-                      <p className="text-xs text-slate-400 font-bold tracking-wide">PORTFOLIO FULLY IPS COMPLIANT</p>
-                      <p className="text-[10px] text-slate-500 max-w-[250px] text-center leading-relaxed">
-                        No policy threshold deviations detected. All positions and weights conform with Stetson IPS regulations.
-                      </p>
+                    <div className="flex flex-col items-center justify-center py-24 border border-dashed border-white/5 rounded-[2rem] space-y-6 bg-white/[0.01]">
+                      <div className="h-16 w-16 bg-cyan-500/10 rounded-full flex items-center justify-center">
+                        <ShieldCheck size={32} className="text-cyan-400" />
+                      </div>
+                      <div className="text-center space-y-2">
+                        <p className="text-xs font-black text-white uppercase tracking-widest">Shield Integrity 100%</p>
+                        <p className="text-[11px] text-slate-500 max-w-[280px] font-medium leading-relaxed">
+                          All institutional assets are within IPS safety thresholds. Neural grid is stable.
+                        </p>
+                      </div>
                     </div>
                   ) : (
-                    <div className="space-y-3">
+                    <div className="space-y-4">
                       {violations.map((v) => (
-                        <div key={v.id} className="p-4 bg-slate-900/40 border border-slate-850 hover:border-slate-800 rounded-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-all">
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2">
-                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${getSeverityBadge(v.severity)}`}>
+                        <div key={v.id} className="p-6 bg-white/[0.02] border border-white/5 hover:border-cyan-500/30 rounded-[1.5rem] flex flex-col md:flex-row justify-between items-start md:items-center gap-6 transition-all group">
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-3">
+                              <span className={`text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full border ${getSeverityBadge(v.severity)}`}>
                                 {v.severity}
                               </span>
-                              <span className="text-xs font-mono font-bold text-slate-200 capitalize">
-                                {v.event_type.replace(/_/g, ' ')}
+                              <span className="text-sm font-black text-white tracking-tight">
+                                {v.event_type.replace(/_/g, ' ').toUpperCase()}
                               </span>
                             </div>
-                            <p className="text-xs text-slate-400 leading-relaxed max-w-md">
+                            <p className="text-xs text-slate-500 font-medium leading-relaxed max-w-lg group-hover:text-slate-400 transition-colors">
                               {v.details.message}
                             </p>
                           </div>
                           <button
                             onClick={() => setSelectedViolation(v)}
-                            className="px-3.5 py-1.5 bg-blue-600/10 hover:bg-blue-600 border border-blue-500/20 hover:border-blue-500 rounded-lg text-[10px] font-bold tracking-wider text-blue-400 hover:text-white transition-all flex items-center gap-1.5 cursor-pointer shadow"
+                            className="px-6 py-2.5 bg-cyan-500/10 hover:bg-cyan-500 border border-cyan-500/20 hover:border-cyan-500 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] text-cyan-400 hover:text-[#05070A] transition-all flex items-center gap-2 cursor-pointer shadow-lg active:scale-95"
                           >
-                            <Sparkles size={11} />
-                            RAG Analysis
+                            <Sparkles size={12} />
+                            Neural RAG
                           </button>
                         </div>
                       ))}
@@ -673,504 +687,239 @@ export default function GripperDashboard() {
                   )}
                 </div>
 
-                {/* Audit & Compliance Log */}
-                <div className="bg-[#0C1020] border border-slate-800 rounded-2xl p-6 space-y-4">
-                  <h3 className="text-sm font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
-                    <Clock size={16} className="text-blue-400" />
-                    Board Audit Trail
+                <div className="bg-[#0A0D14] border border-white/5 rounded-[2.5rem] p-10 space-y-8">
+                  <h3 className="text-lg font-black text-white tracking-tight flex items-center gap-3">
+                    <Clock size={20} className="text-cyan-400" />
+                    Audit Log
                   </h3>
-
-                  <div className="space-y-4 overflow-y-auto max-h-[350px] pr-2">
-                    {/* Active Violations (Timeline Items) */}
-                    {violations.map((v) => (
-                      <div key={v.id} className="flex gap-3 text-xs">
+                  <div className="space-y-6 max-h-[500px] overflow-y-auto pr-4 scrollbar-hide">
+                    {[...violations, ...resolvedViolations].sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map((v, i) => (
+                      <div key={v.id} className="flex gap-4 relative">
                         <div className="flex flex-col items-center">
-                          <div className="h-2 w-2 rounded-full bg-red-400 mt-1.5" />
-                          <div className="w-[1px] bg-slate-850 flex-1 my-1" />
+                          <div className={`h-2.5 w-2.5 rounded-full z-10 ${v.resolved ? 'bg-cyan-400' : 'bg-red-500'}`} />
+                          {i !== (violations.length + resolvedViolations.length - 1) && <div className="w-[1px] bg-white/5 flex-1 my-1" />}
                         </div>
-                        <div className="pb-4">
-                          <span className="font-semibold text-slate-300">Violation Opened: {v.event_type.replace(/_/g, ' ')}</span>
-                          <span className="block text-[10px] text-slate-500 mt-0.5">{new Date(v.created_at).toLocaleString()}</span>
-                          <p className="text-[10px] text-slate-400 leading-relaxed mt-1">{v.details.message}</p>
-                        </div>
-                      </div>
-                    ))}
-
-                    {/* Resolved Violations (Timeline Items) */}
-                    {resolvedViolations.map((v) => (
-                      <div key={v.id} className="flex gap-3 text-xs">
-                        <div className="flex flex-col items-center">
-                          <div className="h-2 w-2 rounded-full bg-emerald-400 mt-1.5" />
-                          <div className="w-[1px] bg-slate-850 flex-1 my-1" />
-                        </div>
-                        <div className="pb-4">
-                          <span className="font-semibold text-emerald-400">Violation Resolved: {v.event_type.replace(/_/g, ' ')}</span>
-                          <span className="block text-[10px] text-slate-500 mt-0.5">
-                            Resolved at {v.resolved_at ? new Date(v.resolved_at).toLocaleString() : 'N/A'}
+                        <div className="pb-6">
+                          <span className={`text-[10px] font-black uppercase tracking-widest ${v.resolved ? 'text-cyan-400' : 'text-red-500'}`}>
+                            {v.resolved ? 'NEUTRALIZED' : 'BREACH DETECTED'}
                           </span>
-                          <p className="text-[10px] text-slate-400 leading-relaxed mt-1">{v.details.message}</p>
+                          <h4 className="text-xs font-black text-slate-300 mt-1 uppercase tracking-tight">{v.event_type.replace(/_/g, ' ')}</h4>
+                          <span className="block text-[9px] text-slate-600 font-bold mt-1 uppercase tracking-widest">{new Date(v.created_at).toLocaleTimeString()}</span>
+                          <p className="text-[10px] text-slate-500 font-medium leading-relaxed mt-2 italic">"{v.details.message}"</p>
                         </div>
                       </div>
                     ))}
-
-                    {violations.length === 0 && resolvedViolations.length === 0 && (
-                      <div className="text-center py-8 text-[10px] text-slate-500 font-mono">
-                        Audit trail empty.
-                      </div>
-                    )}
                   </div>
                 </div>
-
               </div>
             </motion.div>
           )}
 
-          {/* TAB 2: PORTFOLIO & RULES */}
           {activeTab === 'Portfolio' && (
-            <motion.div 
-              initial={{ opacity: 0, y: 15 }} 
-              animate={{ opacity: 1, y: 0 }} 
-              className="space-y-6"
-            >
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                
-                {/* Holdings Manager (Edit holdings weights) */}
-                <div className="lg:col-span-2 bg-[#0C1020] border border-slate-800 rounded-2xl p-6 space-y-5">
-                  <div className="flex justify-between items-center border-b border-slate-850 pb-4">
-                    <h3 className="text-sm font-bold text-slate-200 uppercase tracking-wider">
-                      Portfolio Weight Allocations
-                    </h3>
-                    <div className="text-xs text-slate-500 flex gap-4">
-                      <span>
-                        Total Allocated: <span className={`font-bold font-mono ${totalHoldingsWeight > 1.0 ? 'text-red-400' : 'text-slate-350'}`}>
-                          {(totalHoldingsWeight * 100).toFixed(1)}%
-                        </span>
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Add Holding Form Inline */}
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3 bg-slate-900/30 p-4 border border-slate-850 rounded-xl items-end">
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Ticker</label>
-                      <input 
-                        type="text" 
-                        value={newTicker}
-                        onChange={(e) => setNewTicker(e.target.value)}
-                        placeholder="e.g. AAPL"
-                        className="w-full bg-[#0F172A] border border-slate-800 rounded-lg py-1 px-2.5 text-xs text-slate-200 focus:outline-none"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Weight (%)</label>
-                      <input 
-                        type="number" 
-                        value={newWeight}
-                        onChange={(e) => setNewWeight(parseFloat(e.target.value) || 0)}
-                        placeholder="5"
-                        className="w-full bg-[#0F172A] border border-slate-800 rounded-lg py-1 px-2.5 text-xs text-slate-200 focus:outline-none"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Cost Basis ($)</label>
-                      <input 
-                        type="number" 
-                        value={newCostBasis}
-                        onChange={(e) => setNewCostBasis(parseFloat(e.target.value) || 0)}
-                        placeholder="150"
-                        className="w-full bg-[#0F172A] border border-slate-800 rounded-lg py-1 px-2.5 text-xs text-slate-200 focus:outline-none"
-                      />
-                    </div>
-                    <button 
-                      onClick={addDraftHolding}
-                      className="w-full bg-blue-600 hover:bg-blue-500 py-1.5 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
-                    >
-                      <Plus size={14} /> Add Asset
-                    </button>
-                  </div>
-
-                  {/* List of draft holdings */}
-                  <div className="space-y-3.5 pt-2 max-h-[300px] overflow-y-auto pr-2">
-                    {holdingsDraft.map((h, index) => (
-                      <div key={index} className="p-3.5 bg-slate-900/20 border border-slate-850 rounded-xl flex items-center justify-between gap-4">
-                        <div className="w-20">
-                          <span className="text-xs font-black font-mono text-slate-200">{h.ticker}</span>
-                        </div>
-
-                        <div className="flex-1 flex items-center gap-3">
-                          <input 
-                            type="range" 
-                            min="0" 
-                            max="50" 
-                            value={Math.round(h.weight * 100)} 
-                            onChange={(e) => updateDraftWeight(index, parseInt(e.target.value))}
-                            className="flex-1 accent-blue-500 h-1 rounded-lg bg-slate-800"
-                          />
-                          <span className="text-xs font-bold font-mono text-slate-400 w-10 text-right">
-                            {Math.round(h.weight * 100)}%
-                          </span>
-                        </div>
-
-                        <div className="w-24 text-right">
-                          <span className="text-[10px] text-slate-500 block">Cost Basis</span>
-                          <span className="text-xs font-mono font-medium text-slate-350">${h.cost_basis}</span>
-                        </div>
-
-                        <button 
-                          onClick={() => removeDraftHolding(index)}
-                          className="text-slate-600 hover:text-red-400 p-1 transition-colors"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Sandbox control & Commit buttons */}
-                  <div className="border-t border-slate-850 pt-4 flex justify-between items-center">
-                    <button
-                      onClick={() => {
-                        setSimulationActive(!simulationActive);
-                        if (!simulationActive) {
-                          setSimulationTriggered(false);
-                        }
-                      }}
-                      className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
-                        simulationActive 
-                          ? 'bg-amber-600/10 text-amber-400 border border-amber-500/20' 
-                          : 'bg-slate-900 border border-slate-800 text-slate-300'
-                      }`}
-                    >
-                      <Sparkles size={13} />
-                      {simulationActive ? 'Disable Sandbox' : 'Enable Simulation Sandbox'}
-                    </button>
-
-                    <button 
-                      onClick={commitHoldings}
-                      disabled={isLoading}
-                      className="bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-800 text-white font-bold py-2.5 px-5 rounded-xl text-xs transition shadow shadow-emerald-500/10 cursor-pointer"
-                    >
-                      Save Portfolio Changes
-                    </button>
-                  </div>
-
-                  {/* Sandbox results panel */}
-                  {simulationActive && (
-                    <motion.div 
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="mt-4 p-5 bg-amber-950/10 border border-amber-900/30 rounded-2xl space-y-4"
-                    >
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <h4 className="text-xs font-extrabold text-amber-400 uppercase tracking-widest flex items-center gap-1.5">
-                            <Sparkles size={13} />
-                            Scenario Simulation Sandbox
-                          </h4>
-                          <p className="text-[10px] text-slate-500 mt-0.5">
-                            Evaluate rule violations hypothetically without modifying actual database holdings.
-                          </p>
-                        </div>
-
-                        <button
-                          onClick={handleSandboxSimulate}
-                          disabled={isLoading}
-                          className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-955 rounded-lg text-[10px] font-black tracking-wider transition uppercase"
-                        >
-                          {isLoading ? 'Running check...' : 'Run Simulation'}
-                        </button>
-                      </div>
-
-                      {simulationTriggered && (
-                        <div className="space-y-2">
-                          <span className="text-[10px] font-bold text-slate-450 uppercase tracking-wider block">
-                            Simulated Compliance Outputs ({simulatedViolations.length})
-                          </span>
-                          
-                          {simulatedViolations.length === 0 ? (
-                            <div className="flex items-center gap-2 p-3 bg-emerald-950/20 border border-emerald-900/40 text-emerald-450 rounded-xl text-xs">
-                              <CheckCircle size={14} className="text-emerald-400" />
-                              <span>Hypothetical portfolio remains fully compliant with active IPS regulations.</span>
-                            </div>
-                          ) : (
-                            <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
-                              {simulatedViolations.map((v, i) => (
-                                <div key={i} className="p-3 bg-red-950/10 border border-red-900/30 rounded-xl flex justify-between items-start text-xs gap-3">
-                                  <div>
-                                    <div className="flex items-center gap-1.5">
-                                      <span className="h-1.5 w-1.5 rounded-full bg-red-450" />
-                                      <span className="font-bold text-red-400 uppercase font-mono tracking-tight">{v.event_type}</span>
-                                    </div>
-                                    <p className="text-[10px] text-slate-400 mt-1">{v.details.message}</p>
-                                  </div>
-                                  <span className="text-[9px] bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded font-mono font-bold capitalize">
-                                    {v.severity}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </motion.div>
-                  )}
-                </div>
-
-                {/* SVG Sector exposure comparison chart */}
-                <div className="bg-[#0C1020] border border-slate-800 rounded-2xl p-6 space-y-6">
-                  <div>
-                    <h3 className="text-sm font-bold text-slate-200 uppercase tracking-wider">
-                      Sector Exposures vs. Limits
-                    </h3>
-                    <p className="text-[10px] text-slate-500 mt-1">Comparing total weights relative to 30% IPS limits</p>
-                  </div>
-
-                  {/* Built-in SVG exposure chart */}
-                  <div className="space-y-4 pt-2">
-                    {SECTORS.map((sec) => {
-                      // Calculate weight for sector
-                      const secWeight = holdings.reduce((sum, h) => {
-                        // Quick lookup for sectors matching rules.py
-                        let mapSec = 'Other';
-                        if (['AAPL', 'MSFT', 'NVDA', 'MCRT'].includes(h.ticker)) mapSec = 'Technology';
-                        else if (['GOOGL', 'META'].includes(h.ticker)) mapSec = 'Communication Services';
-                        else if (['AMZN', 'TSLA'].includes(h.ticker)) mapSec = 'Consumer Cyclical';
-                        else if (['XOM', 'CVX'].includes(h.ticker)) mapSec = 'Energy';
-                        else if (['JPM', 'BAC', 'GCAP'].includes(h.ticker)) mapSec = 'Financials';
-                        else if (['JNJ', 'LLY'].includes(h.ticker)) mapSec = 'Healthcare';
-                        
-                        return mapSec === sec ? sum + h.weight : sum;
-                      }, 0);
-
-                      const pct = secWeight * 100;
-                      const limit = 30.0;
-                      const isBreached = pct > limit;
-
-                      return (
-                        <div key={sec} className="space-y-1.5">
-                          <div className="flex justify-between text-[10px] font-semibold">
-                            <span className="text-slate-400">{sec}</span>
-                            <span className={isBreached ? 'text-red-400 font-bold' : 'text-slate-500'}>
-                              {pct.toFixed(1)}% <span className="text-[8px] font-normal text-slate-600">/ 30.0%</span>
-                            </span>
-                          </div>
-                          <div className="h-2 w-full bg-slate-900 rounded-full overflow-hidden relative border border-slate-850">
-                            {/* Limit marker line */}
-                            <div className="absolute top-0 bottom-0 left-[30%] w-[1px] bg-red-500/50 z-10 border-dashed" />
-                            <div 
-                              className={`h-full transition-all duration-300 ${isBreached ? 'bg-red-500' : 'bg-blue-500/80'}`}
-                              style={{ width: `${Math.min(100, (pct / 100) * 100)}%` }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              <div className="lg:col-span-2 bg-[#0A0D14] border border-white/5 rounded-[2.5rem] p-10 space-y-10">
+                <div className="flex justify-between items-center pb-6 border-b border-white/5">
+                  <h3 className="text-xl font-black text-white tracking-tight uppercase">Weight Matrix</h3>
+                  <div className="text-[10px] font-black text-slate-500 tracking-[0.2em] uppercase">
+                    System Saturation: <span className={`font-mono ${totalHoldingsWeight > 1.0 ? 'text-red-500' : 'text-cyan-400'}`}>{(totalHoldingsWeight * 100).toFixed(1)}%</span>
                   </div>
                 </div>
 
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-white/[0.02] p-6 rounded-[2rem] border border-white/5 items-end">
+                  {[
+                    { label: 'Asset Ticker', type: 'text', val: newTicker, set: setNewTicker, ph: 'NVDA' },
+                    { label: 'Weight (%)', type: 'number', val: newWeight, set: setNewWeight, ph: '10' },
+                    { label: 'Cost Basis ($)', type: 'number', val: newCostBasis, set: setNewCostBasis, ph: '120' }
+                  ].map((field, i) => (
+                    <div key={i} className="space-y-2">
+                      <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest px-1">{field.label}</label>
+                      <input 
+                        type={field.type} 
+                        value={field.val}
+                        onChange={(e) => field.set(e.target.value as any)}
+                        placeholder={field.ph}
+                        className="w-full bg-[#05070A] border border-white/10 rounded-xl py-2.5 px-4 text-xs text-white focus:outline-none focus:ring-1 focus:ring-cyan-500/50"
+                      />
+                    </div>
+                  ))}
+                  <button onClick={addDraftHolding} className="w-full bg-cyan-600 hover:bg-cyan-500 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest text-white transition-all shadow-lg shadow-cyan-900/10 cursor-pointer">
+                    Integrate
+                  </button>
+                </div>
+
+                <div className="space-y-3 max-h-[400px] overflow-y-auto pr-4 scrollbar-hide">
+                  {holdingsDraft.map((h, i) => (
+                    <div key={i} className="p-6 bg-white/[0.01] border border-white/5 rounded-[1.5rem] flex items-center gap-8 group hover:bg-white/[0.03] transition-all">
+                      <div className="w-24">
+                        <span className="text-sm font-black font-mono text-white group-hover:text-cyan-400 transition-colors">{h.ticker}</span>
+                        <span className="block text-[8px] text-slate-600 font-black uppercase tracking-tighter mt-1">Asset ID: {i+100}</span>
+                      </div>
+                      <div className="flex-1 space-y-2">
+                        <input type="range" min="0" max="50" value={Math.round(h.weight * 100)} onChange={(e) => updateDraftWeight(i, parseInt(e.target.value))} className="w-full h-1 bg-white/5 rounded-full appearance-none accent-cyan-400" />
+                        <div className="flex justify-between text-[9px] font-black text-slate-600 uppercase">
+                          <span>Allocation Threshold</span>
+                          <span className="text-cyan-400">{Math.round(h.weight * 100)}%</span>
+                        </div>
+                      </div>
+                      <div className="w-24 text-right">
+                        <span className="text-[9px] text-slate-600 font-black uppercase block">Basis</span>
+                        <span className="text-sm font-mono font-black text-white">${h.cost_basis}</span>
+                      </div>
+                      <button onClick={() => removeDraftHolding(i)} className="text-slate-700 hover:text-red-500 p-2 transition-colors cursor-pointer"><Trash2 size={16} /></button>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="pt-8 border-t border-white/5 flex justify-between items-center">
+                  <button onClick={() => setSimulationActive(!simulationActive)} className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${simulationActive ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20' : 'bg-white/[0.02] text-slate-500 hover:text-slate-300'}`}>
+                    {simulationActive ? 'Disable Scenario' : 'Hypothetical Sandbox'}
+                  </button>
+                  <button onClick={commitHoldings} disabled={isLoading} className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-black py-4 px-10 rounded-2xl text-[11px] uppercase tracking-widest transition-all shadow-xl shadow-cyan-900/20 disabled:opacity-50 cursor-pointer active:scale-95">
+                    Commit Changeset
+                  </button>
+                </div>
+              </div>
+
+              {/* Sector Exposure Chart */}
+              <div className="bg-[#0A0D14] border border-white/5 rounded-[2.5rem] p-10 space-y-10">
+                <div>
+                  <h3 className="text-xl font-black text-white tracking-tight uppercase">Exposures</h3>
+                  <p className="text-[10px] text-slate-500 mt-2 font-black tracking-widest uppercase">Grid Saturation Monitor</p>
+                </div>
+                <div className="space-y-6">
+                  {SECTORS.map((sec) => {
+                    const secWeight = holdings.reduce((sum, h) => {
+                      let mapSec = 'Other';
+                      if (['AAPL', 'MSFT', 'NVDA', 'MCRT'].includes(h.ticker)) mapSec = 'Technology';
+                      else if (['GOOGL', 'META'].includes(h.ticker)) mapSec = 'Communication Services';
+                      else if (['AMZN', 'TSLA'].includes(h.ticker)) mapSec = 'Consumer Cyclical';
+                      else if (['XOM', 'CVX'].includes(h.ticker)) mapSec = 'Energy';
+                      else if (['JPM', 'BAC', 'GCAP'].includes(h.ticker)) mapSec = 'Financials';
+                      else if (['JNJ', 'LLY'].includes(h.ticker)) mapSec = 'Healthcare';
+                      return mapSec === sec ? sum + h.weight : sum;
+                    }, 0);
+                    const pct = secWeight * 100;
+                    const limit = 30.0;
+                    const isBreached = pct > limit;
+                    return (
+                      <div key={sec} className="space-y-3">
+                        <div className="flex justify-between text-[10px] font-black uppercase tracking-widest">
+                          <span className="text-slate-500">{sec}</span>
+                          <span className={isBreached ? 'text-red-500' : 'text-cyan-400'}>{pct.toFixed(1)}% / {limit}%</span>
+                        </div>
+                        <div className="h-1.5 w-full bg-white/[0.03] rounded-full overflow-hidden relative">
+                          <div className={`h-full transition-all duration-1000 ${isBreached ? 'bg-red-500 shadow-[0_0_15px_rgba(239,68,68,0.5)]' : 'bg-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.3)]'}`} style={{ width: `${Math.min(100, (pct / 100) * 100)}%` }} />
+                          <div className="absolute top-0 bottom-0 left-[30%] w-[1px] bg-red-500/40 z-10" />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </motion.div>
           )}
 
-          {/* TAB 3: SEC INGESTION HUB */}
           {activeTab === 'SEC Ingestion' && (
-            <motion.div 
-              initial={{ opacity: 0, y: 15 }} 
-              animate={{ opacity: 1, y: 0 }} 
-              className="grid grid-cols-1 lg:grid-cols-3 gap-6"
-            >
-              {/* Form panel */}
-              <div className="lg:col-span-2 bg-[#0C1020] border border-slate-800 rounded-2xl p-6 space-y-6">
-                <div>
-                  <h3 className="text-sm font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
-                    <Upload size={16} className="text-blue-400" />
-                    Gripper Ingestion Pipeline
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-1">Upload analyst memos or committee proposals for background processing.</p>
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              <div className="lg:col-span-2 bg-[#0A0D14] border border-white/5 rounded-[2.5rem] p-10 space-y-10">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-cyan-500/10 rounded-2xl"><Upload className="text-cyan-400" size={24} /></div>
+                  <h3 className="text-2xl font-black text-white tracking-tight uppercase">Neural Ingestion Pipeline</h3>
                 </div>
-
-                <form onSubmit={handleUpload} className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Company name (Ticker)</label>
-                      <input 
-                        type="text" 
-                        value={company}
-                        onChange={(e) => setCompany(e.target.value)}
-                        placeholder="e.g. Tesla (TSLA)"
-                        required
-                        className="w-full bg-[#0F172A] border border-slate-800 rounded-xl py-2 px-3 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      />
+                <form onSubmit={handleUpload} className="space-y-8">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Target Entity / Ticker</label>
+                      <input type="text" value={company} onChange={(e) => setCompany(e.target.value)} placeholder="e.g. Tesla (TSLA)" required className="w-full bg-white/[0.03] border border-white/10 rounded-2xl py-4 px-5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-cyan-500/50 transition-all" />
                     </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Sector Class</label>
-                      <select 
-                        value={sector}
-                        onChange={(e) => setSector(e.target.value)}
-                        className="w-full bg-[#0F172A] border border-slate-800 rounded-xl py-2 px-3 text-xs text-slate-200 focus:outline-none"
-                      >
-                        {SECTORS.map(s => <option key={s} value={s}>{s}</option>)}
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Sector Classification</label>
+                      <select value={sector} onChange={(e) => setSector(e.target.value)} className="w-full bg-white/[0.03] border border-white/10 rounded-2xl py-4 px-5 text-sm text-white focus:outline-none appearance-none cursor-pointer">
+                        {SECTORS.map(s => <option key={s} value={s} className="bg-[#0A0D14]">{s}</option>)}
                       </select>
                     </div>
                   </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Recommendation</label>
-                      <select 
-                        value={recommendation}
-                        onChange={(e) => setRecommendation(e.target.value)}
-                        className="w-full bg-[#0F172A] border border-slate-800 rounded-xl py-2 px-3 text-xs text-slate-200 focus:outline-none"
-                      >
-                        <option value="buy">Exception Buy Recommendation</option>
-                        <option value="hold">Hold Exception</option>
-                        <option value="sell">Exit Thesis Rationale</option>
-                      </select>
-                    </div>
-                    
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Select PDF Document</label>
-                      <input 
-                        type="file" 
-                        accept=".pdf"
-                        onChange={(e) => setSelectedFile(e.target.files ? e.target.files[0] : null)}
-                        required
-                        className="w-full text-xs file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-bold file:uppercase file:bg-blue-600/10 file:text-blue-400 hover:file:bg-blue-600/20 file:cursor-pointer text-slate-400 bg-[#0F172A] border border-slate-800 rounded-xl py-1 px-3"
-                      />
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Analytical Sentiment</label>
+                    <select value={recommendation} onChange={(e) => setRecommendation(e.target.value)} className="w-full bg-white/[0.03] border border-white/10 rounded-2xl py-4 px-5 text-sm text-white focus:outline-none appearance-none cursor-pointer">
+                      <option value="buy" className="bg-[#0A0D14]">Exception Buy - Bullish Momentum</option>
+                      <option value="hold" className="bg-[#0A0D14]">Exception Hold - Strategic Patience</option>
+                      <option value="sell" className="bg-[#0A0D14]">Exit Protocol - Bearish Reversal</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Source Payload (PDF)</label>
+                    <div className="relative">
+                      <input type="file" accept=".pdf" onChange={(e) => setSelectedFile(e.target.files ? e.target.files[0] : null)} required className="w-full opacity-0 absolute inset-0 z-10 cursor-pointer" />
+                      <div className="w-full bg-white/[0.01] border-2 border-dashed border-white/5 rounded-[2rem] py-12 flex flex-col items-center justify-center gap-4 transition-all hover:bg-white/[0.03] hover:border-cyan-500/20">
+                        <Upload size={32} className="text-slate-700" />
+                        <span className="text-xs font-black uppercase tracking-widest">{selectedFile ? selectedFile.name : 'Drop Analytical Memo'}</span>
+                      </div>
                     </div>
                   </div>
-
-                  {uploadStatus.msg && (
-                    <div className={`p-3 rounded-lg text-xs border ${
-                      uploadStatus.type === 'success' ? 'bg-emerald-950/20 border-emerald-800/50 text-emerald-400' : 'bg-red-950/20 border-red-900/50 text-red-400'
-                    }`}>
-                      {uploadStatus.msg}
-                    </div>
-                  )}
-
-                  <button 
-                    type="submit"
-                    className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 rounded-xl text-xs font-bold tracking-wider text-white shadow shadow-blue-500/15 cursor-pointer flex items-center justify-center gap-1.5"
-                  >
-                    <Upload size={14} /> Ingest & Vectorize Document
-                  </button>
+                  {uploadStatus.msg && <div className={`p-4 rounded-2xl text-[11px] font-black tracking-wide border ${uploadStatus.type === 'success' ? 'bg-cyan-500/5 border-cyan-500/20 text-cyan-400' : 'bg-red-500/5 border-red-500/20 text-red-400'}`}>{uploadStatus.msg}</div>}
+                  <button type="submit" className="w-full py-5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-2xl text-xs font-black uppercase tracking-[0.3em] transition-all shadow-2xl shadow-cyan-900/20 active:scale-95 cursor-pointer">Initiate Vectorization</button>
                 </form>
               </div>
 
-              {/* Status queue list (Real backend documents + workers status) */}
-              <div className="bg-[#0C1020] border border-slate-800 rounded-2xl p-6 space-y-4">
-                <div>
-                  <h3 className="text-sm font-bold text-slate-200 uppercase tracking-wider">
-                    RQ Background Workers
-                  </h3>
-                  <p className="text-[10px] text-slate-500 mt-1">Ingestion and vectorization pipeline status</p>
-                </div>
-
-                <div className="space-y-3.5 max-h-[350px] overflow-y-auto pr-1">
+              <div className="bg-[#0A0D14] border border-white/5 rounded-[2.5rem] p-10 space-y-10">
+                <h3 className="text-xl font-black text-white tracking-tight uppercase">Worker Grid</h3>
+                <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2 scrollbar-hide">
                   {documents.map((doc) => (
-                    <div key={doc.id} className="p-3.5 bg-slate-900/40 border border-slate-850 rounded-xl flex items-center justify-between gap-3">
+                    <div key={doc.id} className="p-6 bg-white/[0.01] border border-white/5 rounded-[1.5rem] flex items-center justify-between gap-4">
                       <div className="space-y-1 min-w-0 flex-1">
-                        <span className="text-xs font-bold text-slate-350 truncate block">{doc.company}</span>
-                        <span className="text-[9px] text-slate-500 font-medium uppercase font-mono block">
-                          {doc.sector} &bull; Rec: {doc.recommendation}
-                        </span>
+                        <h4 className="text-xs font-black text-white truncate uppercase tracking-tight">{doc.company}</h4>
+                        <span className="text-[8px] text-slate-600 font-black uppercase tracking-widest">{doc.sector} / {doc.recommendation}</span>
                       </div>
-                      
-                      <div className="flex items-center gap-2">
-                        {doc.status === 'pending' || doc.status === 'processing' ? (
-                          <div className="flex items-center gap-1.5 bg-blue-500/10 border border-blue-500/25 px-2 py-0.5 rounded">
-                            <span className="h-1 w-1 rounded-full bg-blue-400 animate-ping" />
-                            <span className="text-[9px] font-bold text-blue-400 uppercase tracking-wider">Vectorizing</span>
-                          </div>
-                        ) : doc.status === 'failed' ? (
-                          <div className="flex items-center gap-1.5 bg-red-500/10 border border-red-500/25 px-2 py-0.5 rounded">
-                            <span className="h-1 w-1 rounded-full bg-red-400" />
-                            <span className="text-[9px] font-bold text-red-400 uppercase tracking-wider">Failed</span>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 rounded">
-                            <span className="h-1 w-1 rounded-full bg-emerald-400" />
-                            <span className="text-[9px] font-bold text-emerald-400 uppercase tracking-wider">Indexed</span>
-                          </div>
-                        )}
+                      <div className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border ${doc.status === 'processed' ? 'bg-cyan-500/5 text-cyan-400 border-cyan-500/20' : 'bg-amber-500/5 text-amber-400 border-amber-500/20'}`}>
+                        {doc.status === 'processed' ? 'Indexed' : 'Pending'}
                       </div>
                     </div>
                   ))}
-
-                  {documents.length === 0 && (
-                    <div className="text-center py-12 text-[10px] text-slate-500 font-mono border border-slate-850 border-dashed rounded-xl">
-                      No reports uploaded or processed for this tenant context yet.
-                    </div>
-                  )}
                 </div>
               </div>
             </motion.div>
           )}
 
-          {/* TAB 4: INSTITUTIONAL MEMORY */}
           {activeTab === 'Institutional Memory' && (
-            <motion.div 
-              initial={{ opacity: 0, y: 15 }} 
-              animate={{ opacity: 1, y: 0 }} 
-              className="space-y-6"
-            >
-              {/* Search form */}
-              <div className="bg-[#0C1020] border border-slate-800 rounded-2xl p-6 space-y-5">
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
+              <div className="bg-[#0A0D14] border border-white/5 rounded-[2.5rem] p-12 space-y-10 relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-1/2 h-full bg-cyan-500/5 blur-[120px] -z-10 group-hover:bg-cyan-500/10 transition-colors" />
                 <div>
-                  <h3 className="text-sm font-bold text-slate-200 uppercase tracking-wider">
-                    Semantic Search Interface
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Directly query the RLS-isolated BGE vector store database.
-                  </p>
+                  <h3 className="text-3xl font-black text-white tracking-tighter uppercase">Query Neural Store</h3>
+                  <p className="text-[10px] text-slate-500 font-black tracking-[0.4em] uppercase mt-2">Semantic Cross-Referencing</p>
                 </div>
-
-                <form onSubmit={handleSemanticSearch} className="flex gap-3">
+                <form onSubmit={handleSemanticSearch} className="flex gap-4">
                   <div className="relative flex-1">
-                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
-                    <input 
-                      type="text"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="e.g. exception rationale for TSLA buy..."
-                      className="w-full bg-[#0F172A] border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-200 focus:outline-none"
-                    />
+                    <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-cyan-400/50" size={20} />
+                    <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Query rationale for asset allocation..." className="w-full bg-white/[0.02] border border-white/10 rounded-2xl pl-14 pr-6 py-5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/30 transition-all font-medium" />
                   </div>
-                  <button 
-                    type="submit"
-                    disabled={isSearching}
-                    className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 text-white rounded-xl text-xs font-bold transition shadow shadow-blue-500/10 cursor-pointer flex items-center gap-2"
-                  >
-                    {isSearching ? 'Querying...' : 'Semantic Search'}
+                  <button type="submit" disabled={isSearching} className="px-10 py-5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all shadow-xl shadow-cyan-900/10 cursor-pointer disabled:opacity-50">
+                    {isSearching ? 'Accessing Neural...' : 'Execute Semantic Query'}
                   </button>
                 </form>
               </div>
 
-              {/* Search results */}
-              <div className="space-y-4">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
-                  Vector Matching Passages ({searchResults.length})
-                </span>
-
+              <div className="space-y-6">
+                <span className="text-[10px] font-black text-slate-600 uppercase tracking-[0.4em] block px-2">Retrieved Passages ({searchResults.length})</span>
                 {searchResults.length === 0 ? (
-                  <div className="text-center py-16 border border-slate-800 border-dashed rounded-2xl text-xs text-slate-500">
-                    {searchQuery ? 'No matching passages retrieved.' : 'Enter a query to search vector database.'}
+                  <div className="py-32 border-2 border-dashed border-white/5 rounded-[3rem] flex flex-col items-center justify-center text-slate-700 bg-white/[0.01]">
+                    <Database size={48} className="opacity-20 mb-4" />
+                    <span className="text-xs font-black uppercase tracking-widest opacity-40">Store Offline</span>
                   </div>
                 ) : (
-                  <div className="space-y-4">
+                  <div className="grid grid-cols-1 gap-6">
                     {searchResults.map((res, i) => (
-                      <div key={i} className="p-5 bg-[#0C1020] border border-slate-800 rounded-2xl space-y-3">
-                        <div className="flex justify-between items-center text-xs">
-                          <span className="font-bold text-blue-400 flex items-center gap-1">
-                            <FileText size={13} />
-                            {res.company} ({res.sector})
-                          </span>
-                          <span className="bg-slate-900 border border-slate-800 text-slate-400 px-2 py-0.5 rounded font-mono">
-                            Cosine Similarity: {(res.similarity * 100).toFixed(1)}% | Page {res.page}
-                          </span>
+                      <div key={i} className="p-10 bg-[#0A0D14] border border-white/5 rounded-[2.5rem] space-y-6 group hover:border-cyan-500/20 transition-all">
+                        <div className="flex justify-between items-center">
+                          <h4 className="text-sm font-black text-cyan-400 uppercase tracking-tight flex items-center gap-3">
+                            <FileText size={16} /> {res.company} / {res.sector}
+                          </h4>
+                          <span className="text-[10px] font-black font-mono text-slate-600 uppercase tracking-tighter">Match Prob: {(res.similarity * 100).toFixed(2)}% | Sector Access Node {res.page}</span>
                         </div>
-                        <p className="text-xs text-slate-400 leading-relaxed font-mono p-3 bg-slate-950/50 border border-slate-850 rounded-xl">
-                          {res.content}
+                        <p className="text-sm text-slate-400 leading-relaxed font-medium p-8 bg-white/[0.01] border border-white/5 rounded-[2rem] relative group-hover:text-slate-300 transition-colors">
+                          <span className="absolute top-0 left-0 w-1 h-full bg-cyan-500/20" />
+                          "{res.content}"
                         </p>
                       </div>
                     ))}
@@ -1179,11 +928,10 @@ export default function GripperDashboard() {
               </div>
             </motion.div>
           )}
-
         </div>
       </main>
 
-      {/* Slide-out Explainability Drawer */}
+      {/* Slide-out Drawer */}
       <ExplainabilityDrawer
         violation={selectedViolation}
         institutionId={currentInstitution?.id || null}
