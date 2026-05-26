@@ -1,7 +1,15 @@
 import os
 from pydantic_settings import BaseSettings
 
-from app.core.redis_client import normalize_redis_url
+def normalize_redis_url(url: str) -> str:
+    normalized = (url or "").strip()
+    if not normalized:
+        return "redis://localhost:6379/0"
+    if normalized.startswith(("redis://", "rediss://", "unix://")):
+        return normalized
+    if "://" not in normalized:
+        return f"redis://{normalized}"
+    return normalized
 
 class Settings(BaseSettings):
     DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://gripper_app:gripper_secure@localhost:5432/gripper")

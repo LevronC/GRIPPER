@@ -4,21 +4,7 @@ from typing import Optional
 
 from redis import Redis
 
-from app.core.config import settings
-
-
-def normalize_redis_url(url: str) -> str:
-    normalized = (url or "").strip()
-    if not normalized:
-        return "redis://localhost:6379/0"
-    if normalized.startswith(("redis://", "rediss://", "unix://")):
-        return normalized
-    if "://" not in normalized:
-        return f"redis://{normalized}"
-    return normalized
-
-
-_redis_client: Optional[Redis] = None
+from app.core.config import normalize_redis_url
 _redis_checked = False
 
 
@@ -29,6 +15,8 @@ def get_redis_client() -> Optional[Redis]:
 
     _redis_checked = True
     try:
+        from app.core.config import settings
+
         client = Redis.from_url(normalize_redis_url(settings.REDIS_URL))
         client.ping()
         _redis_client = client
