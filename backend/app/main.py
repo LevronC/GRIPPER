@@ -4,11 +4,13 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 import uuid
 from pydantic import BaseModel
 from typing import List, Optional
+from jose import jwt, JWTError
 
 from .db.session import get_db
 from .db.seed import seed_default_data, DEFAULT_INSTITUTIONS
@@ -16,8 +18,10 @@ from . import models
 from .api.endpoints import router as api_router
 from app.api.auth import router as auth_router, get_superuser_session
 from app.api.deps import get_current_user, RoleChecker
+from app.core.config import settings
 
 SWAGGER_OPENAPI_URL = os.getenv("SWAGGER_OPENAPI_URL", "/openapi.json")
+public_bearer = HTTPBearer(auto_error=False)
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
@@ -129,26 +133,39 @@ def list_portfolios(db: Session = Depends(get_db), current_user = Depends(get_cu
     ]
 
 @app.get("/institutions")
-def list_institutions(current_user=Depends(get_current_user)):
+def list_institutions(
+    token_creds: Optional[HTTPAuthorizationCredentials] = Depends(public_bearer),
+):
     """
     Returns list of institutions.
     - If unauthenticated (sign-in/sign-up): returns all available tenants.
     - If authenticated: returns ONLY the user's bound institution for security.
     """
+    institution_filter_id = None
+    if token_creds:
+        try:
+            payload = jwt.decode(
+                token_creds.credentials,
+                settings.SECRET_KEY,
+                algorithms=[settings.ALGORITHM],
+            )
+            user_id = payload.get("sub")
+            if user_id:
+                with get_superuser_session() as db:
+                    user = db.query(models.User).filter(models.User.id == uuid.UUID(user_id)).first()
+                    if user:
+                        institution_filter_id = user.institution_id
+        except (JWTError, ValueError):
+            pass
+
     try:
         with get_superuser_session() as db:
-            if current_user:
-                institutions = (
-                    db.query(models.Institution)
-                    .filter(models.Institution.id == current_user.institution_id)
-                    .all()
-                )
+            query = db.query(models.Institution)
+            if institution_filter_id:
+                query = query.filter(models.Institution.id == institution_filter_id)
             else:
-                institutions = (
-                    db.query(models.Institution)
-                    .order_by(models.Institution.name)
-                    .all()
-                )
+                query = query.order_by(models.Institution.name)
+            institutions = query.all()
 
             if institutions:
                 return [
@@ -165,8 +182,8 @@ def list_institutions(current_user=Depends(get_current_user)):
         pass
 
     fallback = DEFAULT_INSTITUTIONS
-    if current_user:
-        fallback = [item for item in fallback if item["id"] == current_user.institution_id]
+    if institution_filter_id:
+        fallback = [item for item in fallback if item["id"] == institution_filter_id]
 
     return [
         {

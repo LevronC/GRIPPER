@@ -9,7 +9,7 @@ import random
 import string
 from typing import Optional
 from datetime import datetime
-from jose import jwt
+from jose import jwt, JWTError
 
 from app.db.session import get_db
 from app import models
@@ -129,7 +129,7 @@ def register_user(user_in: UserRegister, db: Session = Depends(get_db)):
     }
 
 @router.post("/login", response_model=Token)
-def login_user(credentials: UserLogin, db: Session = Depends(get_db)):
+def login_user(credentials: UserLogin):
     with get_superuser_session() as super_db:
         db_user = super_db.query(models.User).filter(models.User.email == credentials.email).first()
     
@@ -218,7 +218,7 @@ class ResetPasswordRequest(BaseModel):
         return v
 
 @router.post("/forgot-password")
-def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db)):
+def forgot_password(payload: ForgotPasswordRequest):
     with get_superuser_session() as super_db:
         user = super_db.query(models.User).filter(models.User.email == payload.email).first()
         if not user:
@@ -243,7 +243,7 @@ def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db
     }
 
 @router.post("/reset-password", response_model=Token)
-def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db)):
+def reset_password(payload: ResetPasswordRequest):
     with get_superuser_session() as super_db:
         user = super_db.query(models.User).filter(models.User.email == payload.email).first()
         if not user:
@@ -273,7 +273,7 @@ def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db))
         }
 
 @router.post("/verify")
-def verify_email(payload: VerifyEmail, db: Session = Depends(get_db)):
+def verify_email(payload: VerifyEmail):
     with get_superuser_session() as super_db:
         user = super_db.query(models.User).filter(models.User.email == payload.email).first()
         if not user:

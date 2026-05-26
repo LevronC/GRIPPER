@@ -9,6 +9,7 @@ from sqlalchemy.orm import sessionmaker
 from app.core import security
 from app.core.config import settings
 from app import models
+from app.db.session import _engine_kwargs
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +45,10 @@ DEMO_USER = {
 
 def seed_default_data() -> None:
     try:
-        engine = create_engine(settings.SUPERUSER_DATABASE_URL, pool_pre_ping=True)
+        engine = create_engine(
+            settings.SUPERUSER_DATABASE_URL,
+            **_engine_kwargs(settings.SUPERUSER_DATABASE_URL),
+        )
         Session = sessionmaker(bind=engine)
     except Exception as exc:
         logger.warning("Skipping seed: database unavailable (%s)", exc)

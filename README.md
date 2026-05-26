@@ -118,7 +118,7 @@ Set production environment variables in Vercel:
 
 | Variable | Required | Notes |
 |----------|----------|-------|
-| `DATABASE_URL` | Yes | PostgreSQL with `pgvector` extension |
+| `DATABASE_URL` | Yes | PostgreSQL with `pgvector` extension. On Vercel + Supabase, use the **Session pooler** URL on port **6543**, not the direct `:5432` host. |
 | `REDIS_URL` | Yes | Token blacklist + RQ (must start with `redis://` or `rediss://`) |
 | `SECRET_KEY` | Yes | JWT signing key |
 | `SUPERUSER_DATABASE_URL` | Recommended | Auth lookups bypassing RLS (defaults from `DATABASE_URL`) |

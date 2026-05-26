@@ -6,7 +6,13 @@ from sqlalchemy.orm import sessionmaker
 
 from app.core.config import settings
 
-engine = create_engine(settings.DATABASE_URL, pool_pre_ping=True)
+def _engine_kwargs(url: str) -> dict:
+    kwargs = {"pool_pre_ping": True}
+    if "supabase.co" in url:
+        kwargs["connect_args"] = {"sslmode": "require"}
+    return kwargs
+
+engine = create_engine(settings.DATABASE_URL, **_engine_kwargs(settings.DATABASE_URL))
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def get_db(request: Request) -> Generator:
