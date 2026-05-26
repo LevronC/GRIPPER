@@ -119,10 +119,19 @@ Set production environment variables in Vercel:
 | Variable | Required | Notes |
 |----------|----------|-------|
 | `DATABASE_URL` | Yes | PostgreSQL with `pgvector` extension |
-| `REDIS_URL` | Yes | Token blacklist + RQ (workers need separate host) |
+| `REDIS_URL` | Yes | Token blacklist + RQ (must start with `redis://` or `rediss://`) |
 | `SECRET_KEY` | Yes | JWT signing key |
 | `SUPERUSER_DATABASE_URL` | Recommended | Auth lookups bypassing RLS (defaults from `DATABASE_URL`) |
 | `VITE_API_BASE_URL` | No | Defaults to `/api` on Vercel |
+
+### Demo login (seeded on startup)
+
+After the database is connected, the API seeds default institutions and a demo account:
+
+- **Stetson University** — `analyst@stetson.edu` / `Gripp3rDemo!`
+- Also available: University of Florida, RGIP Demo Program
+
+Run migrations against production Postgres before first deploy: `cd backend && alembic upgrade head`
 
 ## Scrapling reference scrape
 

@@ -5,10 +5,10 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Form
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from redis import Redis
 from rq import Queue
 
 from app.core.config import settings
+from app.core.redis_client import get_redis_client
 from app.db.session import get_db
 from app import models
 from app.schemas.document import SemanticSearchRequest
@@ -18,9 +18,31 @@ from app.api.deps import get_current_user, RoleChecker
 
 router = APIRouter()
 
-# Initialize RQ connection using Redis url from configuration
-redis_conn = Redis.from_url(settings.REDIS_URL)
-queue = Queue("default", connection=redis_conn)
+_redis_conn = None
+_queue = None
+
+
+def get_task_queue() -> Queue | None:
+    global _redis_conn, _queue
+    if _queue is not None:
+        return _queue
+    _redis_conn = get_redis_client()
+    if not _redis_conn:
+        return None
+    _queue = Queue("default", connection=_redis_conn)
+    return _queue
+
+
+# Backwards-compatible alias for tests that patch api.endpoints.queue
+class _QueueProxy:
+    def __getattr__(self, name):
+        queue = get_task_queue()
+        if queue is None:
+            raise RuntimeError("Redis is not configured; background jobs are unavailable.")
+        return getattr(queue, name)
+
+
+queue = _QueueProxy()
 
 @router.post("/documents/upload", status_code=202)
 def upload_document(
@@ -109,7 +131,10 @@ def upload_document(
     
     # Queue background task to parse, chunk, embed, and store
     try:
-        queue.enqueue(
+        task_queue = get_task_queue()
+        if not task_queue:
+            raise RuntimeError("Redis is not configured")
+        task_queue.enqueue(
             process_document_ingestion,
             str(report_id),
             file_path,

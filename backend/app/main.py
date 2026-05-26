@@ -1,4 +1,5 @@
 import os
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,17 +11,25 @@ from pydantic import BaseModel
 from typing import List, Optional
 
 from .db.session import get_db
+from .db.seed import seed_default_data, DEFAULT_INSTITUTIONS
 from . import models
 from .api.endpoints import router as api_router
-from app.api.auth import router as auth_router
+from app.api.auth import router as auth_router, get_superuser_session
 from app.api.deps import get_current_user, RoleChecker
 
 SWAGGER_OPENAPI_URL = os.getenv("SWAGGER_OPENAPI_URL", "/openapi.json")
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    seed_default_data()
+    yield
+
 
 app = FastAPI(
     title="Gripper Risk Terminal Backend API",
     docs_url=None,
     redoc_url=None,
+    lifespan=lifespan,
 )
 
 
@@ -120,28 +129,53 @@ def list_portfolios(db: Session = Depends(get_db), current_user = Depends(get_cu
     ]
 
 @app.get("/institutions")
-def list_institutions(db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+def list_institutions(current_user=Depends(get_current_user)):
     """
-    Returns list of institutions. 
+    Returns list of institutions.
     - If unauthenticated (sign-in/sign-up): returns all available tenants.
     - If authenticated: returns ONLY the user's bound institution for security.
     """
+    try:
+        with get_superuser_session() as db:
+            if current_user:
+                institutions = (
+                    db.query(models.Institution)
+                    .filter(models.Institution.id == current_user.institution_id)
+                    .all()
+                )
+            else:
+                institutions = (
+                    db.query(models.Institution)
+                    .order_by(models.Institution.name)
+                    .all()
+                )
+
+            if institutions:
+                return [
+                    {
+                        "id": str(i.id),
+                        "name": i.name,
+                        "slug": i.slug,
+                        "tier": i.tier,
+                        "created_at": i.created_at,
+                    }
+                    for i in institutions
+                ]
+    except Exception:
+        pass
+
+    fallback = DEFAULT_INSTITUTIONS
     if current_user:
-        # Enforce strict isolation: even if RLS is on the table, we filter explicitly here.
-        institutions = db.query(models.Institution).filter(models.Institution.id == current_user.institution_id).all()
-    else:
-        # For public signup/login dropdown
-        institutions = db.query(models.Institution).all()
-        
+        fallback = [item for item in fallback if item["id"] == current_user.institution_id]
+
     return [
         {
-            "id": str(i.id),
-            "name": i.name,
-            "slug": i.slug,
-            "tier": i.tier,
-            "created_at": i.created_at
+            "id": str(item["id"]),
+            "name": item["name"],
+            "slug": item["slug"],
+            "tier": item["tier"],
         }
-        for i in institutions
+        for item in fallback
     ]
 
 @app.get("/portfolios/{portfolio_id}/holdings")

@@ -46,6 +46,7 @@ import { AppBackground } from './ui/AppBackground';
 import { SiteHeader } from './ui/SiteHeader';
 import { apiUrl, parseApiError } from '../lib/api';
 import { routes } from '../lib/routes';
+import { DEMO_LOGIN_HINT } from '../lib/defaultInstitutions';
 
 // Static metadata of sectors for mapping
 const SECTORS = ['Technology', 'Financials', 'Consumer Cyclical', 'Energy', 'Healthcare', 'Communication Services', 'Other'];
@@ -654,11 +655,17 @@ export default function GripperDashboard() {
                     </select>
                     {institutions.length === 0 && (
                       <p className="text-[10px] text-amber-400/80 px-1 leading-relaxed">
-                        Run the backend and create an institution via POST /institutions or see{' '}
+                        Institutions could not be loaded from the API. Check deployment env vars or see{' '}
                         <Link to={routes.docs} className="underline hover:text-cyan-400">
                           docs
                         </Link>
                         .
+                      </p>
+                    )}
+                    {authMode === 'login' && institutions.length > 0 && (
+                      <p className="text-[10px] text-slate-500 px-1 leading-relaxed">
+                        Demo: {DEMO_LOGIN_HINT.institutionName} · {DEMO_LOGIN_HINT.email} · password{' '}
+                        <span className="font-mono text-cyan-400/90">{DEMO_LOGIN_HINT.password}</span>
                       </p>
                     )}
                   </div>

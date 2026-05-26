@@ -67,7 +67,11 @@ def register_user(user_in: UserRegister, db: Session = Depends(get_db)):
                 detail="A user with this email is already registered.",
             )
 
-    institution = db.query(models.Institution).filter(models.Institution.id == user_in.institution_id).first()
+        institution = (
+            super_db.query(models.Institution)
+            .filter(models.Institution.id == user_in.institution_id)
+            .first()
+        )
     if not institution:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

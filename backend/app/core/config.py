@@ -1,6 +1,8 @@
 import os
 from pydantic_settings import BaseSettings
 
+from app.core.redis_client import normalize_redis_url
+
 class Settings(BaseSettings):
     DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://gripper_app:gripper_secure@localhost:5432/gripper")
     SUPERUSER_DATABASE_URL: str = os.getenv(
@@ -21,6 +23,7 @@ class Settings(BaseSettings):
         env_file = ".env"
 
 settings = Settings()
+settings.REDIS_URL = normalize_redis_url(settings.REDIS_URL)
 
 # Calculate default upload dir if not set in environment
 if not settings.UPLOAD_DIR:

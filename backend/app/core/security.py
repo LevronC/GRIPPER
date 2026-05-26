@@ -3,11 +3,9 @@ from typing import Any, Union
 import uuid
 from jose import jwt
 import bcrypt
-from redis import Redis
-from app.core.config import settings
 
-# Initialize Redis client for token blacklisting
-redis_client = Redis.from_url(settings.REDIS_URL)
+from app.core.config import settings
+from app.core.redis_client import get_redis_client
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     try:
@@ -41,10 +39,16 @@ def blacklist_token(token_jti: str, expire_seconds: int):
     """
     Store blacklisted token ID in Redis with expiration.
     """
+    redis_client = get_redis_client()
+    if not redis_client:
+        return
     redis_client.setex(f"token_blacklist:{token_jti}", expire_seconds, "1")
 
 def is_token_blacklisted(token_jti: str) -> bool:
     """
     Check if a token ID exists in the Redis blacklist.
     """
+    redis_client = get_redis_client()
+    if not redis_client:
+        return False
     return redis_client.exists(f"token_blacklist:{token_jti}") > 0
