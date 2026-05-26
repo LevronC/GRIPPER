@@ -1,0 +1,24 @@
+import os
+from pydantic_settings import BaseSettings
+
+class Settings(BaseSettings):
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://gripper_app:gripper_secure@localhost:5432/gripper")
+    REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", "")
+    EMBEDDING_MODEL_NAME: str = "BAAI/bge-small-en-v1.5"
+    SECRET_KEY: str = os.getenv("SECRET_KEY", "gripper_super_secret_signing_key_2026")
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
+
+    class Config:
+        env_file = ".env"
+
+settings = Settings()
+
+# Calculate default upload dir if not set in environment
+if not settings.UPLOAD_DIR:
+    backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+    settings.UPLOAD_DIR = os.path.join(backend_dir, "storage", "uploads")
+
+# Ensure the upload directory exists
+os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
