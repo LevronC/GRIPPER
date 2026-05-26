@@ -9,7 +9,7 @@ from app.core.config import settings
 engine = create_engine(settings.DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-def get_db(request: Request = None) -> Generator:
+def get_db(request: Request) -> Generator:
     db = SessionLocal()
     tenant_id = None
     if request:

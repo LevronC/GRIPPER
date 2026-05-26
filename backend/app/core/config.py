@@ -3,6 +3,13 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://gripper_app:gripper_secure@localhost:5432/gripper")
+    SUPERUSER_DATABASE_URL: str = os.getenv(
+        "SUPERUSER_DATABASE_URL",
+        os.getenv(
+            "DATABASE_URL",
+            "postgresql://gripper_app:gripper_secure@localhost:5432/gripper",
+        ).replace("gripper_app:gripper_secure", "civicpulse:civicpulse"),
+    )
     REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
     UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", "")
     EMBEDDING_MODEL_NAME: str = "BAAI/bge-small-en-v1.5"

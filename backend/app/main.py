@@ -1,5 +1,8 @@
+import os
+
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 import uuid
@@ -12,7 +15,29 @@ from .api.endpoints import router as api_router
 from app.api.auth import router as auth_router
 from app.api.deps import get_current_user, RoleChecker
 
-app = FastAPI(title="Gripper Risk Terminal Backend API")
+SWAGGER_OPENAPI_URL = os.getenv("SWAGGER_OPENAPI_URL", "/openapi.json")
+
+app = FastAPI(
+    title="Gripper Risk Terminal Backend API",
+    docs_url=None,
+    redoc_url=None,
+)
+
+
+@app.get("/docs", include_in_schema=False)
+async def swagger_ui_html():
+    return get_swagger_ui_html(
+        openapi_url=SWAGGER_OPENAPI_URL,
+        title=f"{app.title} - Swagger UI",
+    )
+
+
+@app.get("/redoc", include_in_schema=False)
+async def redoc_html():
+    return get_redoc_html(
+        openapi_url=SWAGGER_OPENAPI_URL,
+        title=f"{app.title} - ReDoc",
+    )
 
 app.add_middleware(
     CORSMiddleware,

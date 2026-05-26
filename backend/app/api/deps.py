@@ -49,7 +49,7 @@ def get_current_user(
             )
         
         # Bypass RLS for user lookup because we don't have the tenant context yet
-        super_engine = create_engine(settings.DATABASE_URL.replace("gripper_app:gripper_secure", "civicpulse:civicpulse"))
+        super_engine = create_engine(settings.SUPERUSER_DATABASE_URL, pool_pre_ping=True)
         SuperSession = sessionmaker(bind=super_engine)
         with SuperSession() as super_db:
             user = super_db.query(models.User).filter(models.User.id == uuid.UUID(user_id)).first()

@@ -7,6 +7,15 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     proxy: {
+      // Swagger UI (served via /api/docs) requests /openapi.json at the site root.
+      '/openapi.json': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+      '/docs/oauth2-redirect': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
       '/api': {
         target: 'http://localhost:8000',
         changeOrigin: true,

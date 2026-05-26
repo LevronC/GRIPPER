@@ -24,6 +24,7 @@ dist-ssr
 *.sw?
 
 # Python
+.venv/
 backend/venv/
 backend/storage/uploads/*
 !backend/storage/uploads/.gitkeep

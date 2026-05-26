@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy.orm import Session
-from sqlalchemy import select, text, create_engine
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy import text, create_engine
+from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel, EmailStr, validator
 import uuid
 import random
@@ -18,6 +18,17 @@ from app.core.config import settings
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 reusable_oauth2 = HTTPBearer(auto_error=False)
+
+_super_engine = None
+_super_session_factory = None
+
+
+def get_superuser_session():
+    global _super_engine, _super_session_factory
+    if _super_engine is None:
+        _super_engine = create_engine(settings.SUPERUSER_DATABASE_URL, pool_pre_ping=True)
+        _super_session_factory = sessionmaker(bind=_super_engine)
+    return _super_session_factory()
 
 class UserRegister(BaseModel):
     email: EmailStr
@@ -41,40 +52,36 @@ class Token(BaseModel):
     token_type: str
     role: str
     institution_id: str
+    user_id: str
+    email: str
+    graduation_year: Optional[int] = None
 
 @router.post("/register", status_code=201)
 def register_user(user_in: UserRegister, db: Session = Depends(get_db)):
-    # Check if user already exists
-    # We bypass RLS for registration check by not using tenant context directly, or we can use admin superuser connection.
-    # In normal operations, database RLS does not block querying all user emails for uniqueness check if policies permit or if we run via backend superuser bypass.
-    # Let's run a simple check:
-    existing_user = db.query(models.User).filter(models.User.email == user_in.email).first()
-    if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="A user with this email is already registered."
-        )
-    
-    # Check if institution exists
+    # Check email uniqueness with superuser so RLS cannot hide existing accounts.
+    with get_superuser_session() as super_db:
+        existing_user = super_db.query(models.User).filter(models.User.email == user_in.email).first()
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A user with this email is already registered.",
+            )
+
     institution = db.query(models.Institution).filter(models.Institution.id == user_in.institution_id).first()
     if not institution:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Specified institution not found."
+            detail="Specified institution not found.",
         )
 
-    # Validate role
     valid_roles = ["analyst", "sector_lead", "pm", "faculty", "trustee", "admin"]
     if user_in.role not in valid_roles:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid user role. Must be one of: {', '.join(valid_roles)}"
+            detail=f"Invalid user role. Must be one of: {', '.join(valid_roles)}",
         )
 
-    # Hash the password
     hashed_pwd = security.get_password_hash(user_in.password)
-
-    # Generate a 6-digit verification code
     v_code = "".join(random.choices(string.digits, k=6))
 
     db_user = models.User(
@@ -84,21 +91,29 @@ def register_user(user_in: UserRegister, db: Session = Depends(get_db)):
         role=user_in.role,
         graduation_year=user_in.graduation_year,
         is_verified=False,
-        verification_code=v_code
+        verification_code=v_code,
     )
     db.add(db_user)
-    
-    # We must set the context before commit so that the insert is associated with the tenant
-    db.execute(text("SET LOCAL app.current_institution_id = :inst_id"), {"inst_id": str(user_in.institution_id)})
-    db.commit()
-    
-    # We must re-set context after commit because SET LOCAL is cleared on commit, 
-    # and refresh() needs the context to fetch the record back.
-    db.execute(text("SET LOCAL app.current_institution_id = :inst_id"), {"inst_id": str(user_in.institution_id)})
-    db.refresh(db_user)
 
-    # In a real system, we would send the email here. 
-    # For this terminal, we print it to stdout for verification.
+    try:
+        db.execute(
+            text("SET LOCAL app.current_institution_id = :inst_id"),
+            {"inst_id": str(user_in.institution_id)},
+        )
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A user with this email is already registered.",
+        )
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Registration failed: {exc}",
+        ) from exc
+
     print(f"DEBUG: Verification code for {db_user.email} is: {v_code}")
 
     return {
@@ -106,19 +121,12 @@ def register_user(user_in: UserRegister, db: Session = Depends(get_db)):
         "email": db_user.email,
         "role": db_user.role,
         "institution_id": str(db_user.institution_id),
-        "message": "User registered. Please verify your .edu email using the 6-digit code."
+        "message": "User registered. Please verify your .edu email using the 6-digit code.",
     }
 
 @router.post("/login", response_model=Token)
 def login_user(credentials: UserLogin, db: Session = Depends(get_db)):
-    # To bypass RLS during login (since we don't know the tenant yet), 
-    # we use a temporary superuser session for the lookup.
-    # In a production environment, this would be handled by a specific 
-    # auth service or a DB role with bypassrls permissions.
-    super_engine = create_engine(settings.DATABASE_URL.replace("gripper_app:gripper_secure", "civicpulse:civicpulse"))
-    SuperSession = sessionmaker(bind=super_engine)
-    
-    with SuperSession() as super_db:
+    with get_superuser_session() as super_db:
         db_user = super_db.query(models.User).filter(models.User.email == credentials.email).first()
     
     if not db_user or not db_user.hashed_password:
@@ -147,7 +155,10 @@ def login_user(credentials: UserLogin, db: Session = Depends(get_db)):
         "access_token": token,
         "token_type": "bearer",
         "role": db_user.role,
-        "institution_id": str(db_user.institution_id)
+        "institution_id": str(db_user.institution_id),
+        "user_id": str(db_user.id),
+        "email": db_user.email,
+        "graduation_year": db_user.graduation_year,
     }
 
 @router.post("/logout")
@@ -180,13 +191,86 @@ class VerifyEmail(BaseModel):
     email: EmailStr
     code: str
 
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+    @validator("email")
+    def normalize_email(cls, v):
+        return v.lower()
+
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+    code: str
+    new_password: str
+
+    @validator("email")
+    def normalize_email(cls, v):
+        return v.lower()
+
+    @validator("new_password")
+    def validate_password(cls, v):
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters.")
+        return v
+
+@router.post("/forgot-password")
+def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    with get_superuser_session() as super_db:
+        user = super_db.query(models.User).filter(models.User.email == payload.email).first()
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No account found for that email.",
+            )
+        if not user.is_verified:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Account not verified. Complete email verification before resetting your password.",
+            )
+
+        reset_code = "".join(random.choices(string.digits, k=6))
+        user.verification_code = reset_code
+        super_db.commit()
+
+    print(f"DEBUG: Password reset code for {payload.email} is: {reset_code}")
+
+    return {
+        "message": "If an account exists for that email, a reset code has been sent. In development, check the backend console.",
+    }
+
+@router.post("/reset-password", response_model=Token)
+def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db)):
+    with get_superuser_session() as super_db:
+        user = super_db.query(models.User).filter(models.User.email == payload.email).first()
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+        if not user.is_verified:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Account not verified. Complete email verification first.",
+            )
+        if not user.verification_code or user.verification_code != payload.code:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired reset code.")
+
+        user.hashed_password = security.get_password_hash(payload.new_password)
+        user.verification_code = None
+        super_db.commit()
+        super_db.refresh(user)
+
+        token = security.create_access_token(subject=user.id)
+        return {
+            "access_token": token,
+            "token_type": "bearer",
+            "role": user.role,
+            "institution_id": str(user.institution_id),
+            "user_id": str(user.id),
+            "email": user.email,
+            "graduation_year": user.graduation_year,
+        }
+
 @router.post("/verify")
 def verify_email(payload: VerifyEmail, db: Session = Depends(get_db)):
-    # Use superuser to lookup user to bypass RLS before verification context is set
-    super_engine = create_engine(settings.DATABASE_URL.replace("gripper_app:gripper_secure", "civicpulse:civicpulse"))
-    SuperSession = sessionmaker(bind=super_engine)
-    
-    with SuperSession() as super_db:
+    with get_superuser_session() as super_db:
         user = super_db.query(models.User).filter(models.User.email == payload.email).first()
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
