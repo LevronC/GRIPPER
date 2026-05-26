@@ -3,8 +3,10 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from sqlalchemy import select, text, create_engine
 from sqlalchemy.orm import Session, sessionmaker
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, validator
 import uuid
+import random
+import string
 from typing import Optional
 from datetime import datetime
 from jose import jwt
@@ -23,6 +25,12 @@ class UserRegister(BaseModel):
     institution_id: uuid.UUID
     role: str # analyst, sector_lead, pm, faculty, trustee, admin
     graduation_year: Optional[int] = None
+
+    @validator("email")
+    def validate_edu_email(cls, v):
+        if not v.lower().endswith(".edu"):
+            raise ValueError("Only .edu email addresses are permitted for registration.")
+        return v.lower()
 
 class UserLogin(BaseModel):
     email: EmailStr
@@ -66,12 +74,17 @@ def register_user(user_in: UserRegister, db: Session = Depends(get_db)):
     # Hash the password
     hashed_pwd = security.get_password_hash(user_in.password)
 
+    # Generate a 6-digit verification code
+    v_code = "".join(random.choices(string.digits, k=6))
+
     db_user = models.User(
         email=user_in.email,
         hashed_password=hashed_pwd,
         institution_id=user_in.institution_id,
         role=user_in.role,
-        graduation_year=user_in.graduation_year
+        graduation_year=user_in.graduation_year,
+        is_verified=False,
+        verification_code=v_code
     )
     db.add(db_user)
     
@@ -84,11 +97,16 @@ def register_user(user_in: UserRegister, db: Session = Depends(get_db)):
     db.execute(text("SET LOCAL app.current_institution_id = :inst_id"), {"inst_id": str(user_in.institution_id)})
     db.refresh(db_user)
 
+    # In a real system, we would send the email here. 
+    # For this terminal, we print it to stdout for verification.
+    print(f"DEBUG: Verification code for {db_user.email} is: {v_code}")
+
     return {
         "id": str(db_user.id),
         "email": db_user.email,
         "role": db_user.role,
-        "institution_id": str(db_user.institution_id)
+        "institution_id": str(db_user.institution_id),
+        "message": "User registered. Please verify your .edu email using the 6-digit code."
     }
 
 @router.post("/login", response_model=Token)
@@ -115,6 +133,12 @@ def login_user(credentials: UserLogin, db: Session = Depends(get_db)):
             status_code=status.HTTP_418_IM_A_TEAPOT if credentials.password == "test_pot" else status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password.",
             headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if not db_user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account not verified. Please verify your .edu email."
         )
 
     # Issue JWT token using user id as subject
@@ -151,3 +175,30 @@ def logout(token_creds: Optional[HTTPAuthorizationCredentials] = Depends(reusabl
         pass
         
     return {"message": "Successfully logged out"}
+
+class VerifyEmail(BaseModel):
+    email: EmailStr
+    code: str
+
+@router.post("/verify")
+def verify_email(payload: VerifyEmail, db: Session = Depends(get_db)):
+    # Use superuser to lookup user to bypass RLS before verification context is set
+    super_engine = create_engine(settings.DATABASE_URL.replace("gripper_app:gripper_secure", "civicpulse:civicpulse"))
+    SuperSession = sessionmaker(bind=super_engine)
+    
+    with SuperSession() as super_db:
+        user = super_db.query(models.User).filter(models.User.email == payload.email).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        if user.is_verified:
+            return {"message": "Email already verified"}
+            
+        if user.verification_code != payload.code:
+            raise HTTPException(status_code=400, detail="Invalid verification code")
+            
+        user.is_verified = True
+        user.verification_code = None
+        super_db.commit()
+        
+    return {"message": "Email verified successfully. You can now login."}

@@ -47,6 +47,9 @@ def run_burst_worker():
 
 
 def test_governance_system():
+    app.api.endpoints.queue = test_queue
+    test_queue.empty()
+
     # Paths for mock files
     tsla_thesis_file = "tsla_exception.pdf"
     tsla_thesis_text = (
@@ -131,6 +134,15 @@ def test_governance_system():
             }
         )
         assert reg_response.status_code == 201
+
+        with SuperSession() as s_db:
+            test_user = s_db.query(models.User).filter(models.User.email == "analyst@stetson.edu").one()
+            verification_code = test_user.verification_code
+        verify_response = client.post(
+            "/auth/verify",
+            json={"email": "analyst@stetson.edu", "code": verification_code}
+        )
+        assert verify_response.status_code == 200
         
         # Login to receive JWT token
         print("\n[Auth] Logging in...")

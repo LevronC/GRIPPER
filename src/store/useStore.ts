@@ -56,6 +56,7 @@ interface GripperState {
     email: string;
     role: string;
     institution_id: string;
+    graduation_year?: number | null;
   } | null;
 
   institutions: Institution[];
@@ -173,7 +174,8 @@ export const useStore = create<GripperState>((set, get) => {
             id: data.access_token, // using token as temporary identifier
             email,
             role: data.role,
-            institution_id: data.institution_id
+            institution_id: data.institution_id,
+            graduation_year: data.graduation_year ?? null
           };
           localStorage.setItem('gripper_user', JSON.stringify(userPayload));
           

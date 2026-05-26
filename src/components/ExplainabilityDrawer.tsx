@@ -34,13 +34,13 @@ export default function ExplainabilityDrawer({ violation, institutionId, onClose
 
   useEffect(() => {
     if (!violation || !institutionId) {
-      setResult(null);
       return;
     }
 
     const fetchExplanation = async () => {
       setLoading(true);
       setError(null);
+      setResult(null);
       try {
         const res = await fetch(`http://localhost:8000/violations/${violation.id}/explain`, {
           method: 'POST',
@@ -65,7 +65,7 @@ export default function ExplainabilityDrawer({ violation, institutionId, onClose
     };
 
     fetchExplanation();
-  }, [violation, institutionId]);
+  }, [violation, institutionId, token]);
 
   return (
     <AnimatePresence>

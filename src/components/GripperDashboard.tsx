@@ -24,7 +24,18 @@ import {
   Fingerprint,
   Zap,
   Activity,
-  History
+  History,
+  Newspaper,
+  BarChart3,
+  Mic2,
+  Play,
+  Square,
+  Send,
+  FastForward,
+  Loader2,
+  Volume2,
+  TrendingUp,
+  TrendingDown
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import type { Holding, Violation } from '../store/useStore';
@@ -32,6 +43,66 @@ import ExplainabilityDrawer from './ExplainabilityDrawer';
 
 // Static metadata of sectors for mapping
 const SECTORS = ['Technology', 'Financials', 'Consumer Cyclical', 'Energy', 'Healthcare', 'Communication Services', 'Other'];
+
+const catalystSignals = [
+  { name: 'Rate Cut', probability: 65, impact: 'High' },
+  { name: 'Earnings Beat', probability: 82, impact: 'Critical' },
+  { name: 'Regulatory Review', probability: 24, impact: 'Medium' },
+  { name: 'M&A Rumor', probability: 12, impact: 'Low' },
+  { name: 'Product Launch', probability: 45, impact: 'High' }
+];
+
+const intelligenceStats = [
+  { label: 'Net Asset Value', value: '$4.28M', change: '+12.4%', trend: 'up' },
+  { label: 'Risk Exposure', value: '32.4%', change: '-2.1%', trend: 'down' },
+  { label: 'Alpha Signal', value: '8.42', change: '+0.8', trend: 'up' },
+  { label: 'Portfolio Beta', value: '1.08', change: 'Steady', trend: 'neutral' }
+];
+
+const initialNewsFeed = [
+  {
+    id: '1',
+    headline: 'SEC announces new disclosure rules for technology infrastructure spend',
+    source: 'Bloomberg',
+    time: '2m ago',
+    content: 'The Securities and Exchange Commission adopted new rules intended to enhance transparency for infrastructure expenditures across major technology platforms.'
+  },
+  {
+    id: '2',
+    headline: 'Global chip shortage intensifies after major fabrication plant disruption',
+    source: 'Reuters',
+    time: '15m ago',
+    content: 'A semiconductor manufacturing facility in East Asia reported a serious disruption, potentially constraining supply chains for the next two quarters.'
+  },
+  {
+    id: '3',
+    headline: 'CEO of major logistics provider steps down unexpectedly',
+    source: 'WSJ',
+    time: '45m ago',
+    content: 'The chief executive officer of a large logistics firm announced an immediate resignation, creating near-term continuity and governance concerns.'
+  }
+];
+
+const sampleFiling = `ITEM 1. BUSINESS
+Axiom Dynamics Inc. is a global leader in institutional risk modeling and catalyst prediction.
+Capital expenditures for fiscal year 2026 were $1.2 billion, primarily driven by proprietary data centers.
+For fiscal year 2027, the company anticipates approximately $1.8 billion in CapEx for distributed job clusters and low-latency inference pipelines.`;
+
+type RiskResult = {
+  level: 'low' | 'medium' | 'high';
+  categories: string[];
+  justification: string;
+};
+
+type NewsItem = (typeof initialNewsFeed)[number] & { risk?: RiskResult };
+
+type SearchResult = {
+  company: string;
+  sector: string;
+  similarity: number;
+  page: number;
+  content: string;
+};
 
 export default function GripperDashboard() {
   const {
@@ -48,7 +119,6 @@ export default function GripperDashboard() {
     activeTab,
     isLoading,
     setActiveTab,
-    setInstitution,
     fetchInstitutions,
     evaluateCompliance,
     saveHoldings,
@@ -70,7 +140,7 @@ export default function GripperDashboard() {
 
   // Semantic Search state
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const searchLimit = 3;
   const [isSearching, setIsSearching] = useState(false);
 
@@ -95,22 +165,29 @@ export default function GripperDashboard() {
   const [simulationActive, setSimulationActive] = useState(false);
   const [simulationTriggered, setSimulationTriggered] = useState(false);
 
+  // Intelligence center local state. These are frontend-only simulations adapted from the reference app.
+  const [newsFeed, setNewsFeed] = useState<NewsItem[]>(initialNewsFeed);
+  const [analyzingNewsId, setAnalyzingNewsId] = useState<string | null>(null);
+  const [secQuestion, setSecQuestion] = useState('');
+  const [secAnswer, setSecAnswer] = useState<string | null>(null);
+  const [secLoading, setSecLoading] = useState(false);
+  const [audioPlaying, setAudioPlaying] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const [transcript, setTranscript] = useState<string | null>(null);
+
   // Load initial institutions
   useEffect(() => {
     fetchInstitutions();
-  }, []);
+  }, [fetchInstitutions]);
 
   // Update holdings draft when global holdings change
   useEffect(() => {
+    // The matrix is an editable draft; reset it when backend holdings change.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setHoldingsDraft(holdings);
   }, [holdings]);
 
-  // Set default auth institution once loaded
-  useEffect(() => {
-    if (institutions.length > 0 && !authInstId) {
-      setAuthInstId(institutions[0].id);
-    }
-  }, [institutions]);
+  const selectedAuthInstId = authInstId || institutions[0]?.id || '';
 
   // Poll document ingestion progress periodically if there are pending docs
   useEffect(() => {
@@ -124,7 +201,7 @@ export default function GripperDashboard() {
     }, 4000);
 
     return () => clearInterval(interval);
-  }, [token, currentInstitution]);
+  }, [token, currentInstitution, fetchDocuments]);
 
   // Handle Auth submission
   const handleAuthSubmit = async (e: React.FormEvent) => {
@@ -133,23 +210,23 @@ export default function GripperDashboard() {
     setAuthSuccess('');
 
     if (authMode === 'login') {
-      if (!authInstId) {
+      if (!selectedAuthInstId) {
         setAuthError('Please select an institution context.');
         return;
       }
-      const ok = await login(authEmail, authPassword, authInstId);
+      const ok = await login(authEmail, authPassword, selectedAuthInstId);
       if (!ok) {
         setAuthError('Invalid credentials. Check your password, verification status, or institution selection.');
       }
     } else if (authMode === 'register') {
-      if (!authInstId) {
+      if (!selectedAuthInstId) {
         setAuthError('Please select an institution context.');
         return;
       }
       const res = await register(
         authEmail, 
         authPassword, 
-        authInstId, 
+        selectedAuthInstId, 
         authRole, 
         authGradYear === '' ? undefined : authGradYear
       );
@@ -175,7 +252,7 @@ export default function GripperDashboard() {
           const data = await res.json();
           setAuthError(data.detail || 'Verification failed.');
         }
-      } catch (err) {
+      } catch {
         setAuthError('Network error during verification.');
       }
     }
@@ -215,7 +292,7 @@ export default function GripperDashboard() {
         const err = await res.json();
         setUploadStatus({ type: 'error', msg: err.detail || 'Upload failed.' });
       }
-    } catch (err) {
+    } catch {
       setUploadStatus({ type: 'error', msg: 'Network failure during upload.' });
     }
   };
@@ -258,6 +335,63 @@ export default function GripperDashboard() {
     if (!currentPortfolio || !currentInstitution) return;
     setSimulationTriggered(true);
     await simulateCompliance(currentPortfolio.id, currentInstitution.id, holdingsDraft);
+  };
+
+  const handleAnalyzeNews = async (id: string, content: string) => {
+    setAnalyzingNewsId(id);
+    await new Promise((resolve) => setTimeout(resolve, 650));
+    const normalized = content.toLowerCase();
+    const result: RiskResult = normalized.includes('disruption') || normalized.includes('shortage')
+      ? {
+          level: 'high',
+          categories: ['Supply Chain', 'Concentration Risk'],
+          justification: 'The event can impair revenue assumptions for hardware and semiconductor holdings with concentrated supplier exposure.'
+        }
+      : normalized.includes('sec') || normalized.includes('disclosure')
+        ? {
+            level: 'medium',
+            categories: ['Regulatory', 'Reporting'],
+            justification: 'New disclosure obligations may change compliance workload and create near-term headline risk for covered issuers.'
+          }
+        : {
+            level: 'medium',
+            categories: ['Governance', 'Key Person'],
+            justification: 'Unexpected executive turnover can raise continuity risk until succession plans and investor communications are clear.'
+          };
+
+    setNewsFeed((items) => items.map((item) => item.id === id ? { ...item, risk: result } : item));
+    setAnalyzingNewsId(null);
+  };
+
+  const handleAskSecQuestion = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!secQuestion.trim()) return;
+    setSecLoading(true);
+    setSecAnswer(null);
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    const question = secQuestion.toLowerCase();
+    if (question.includes('capex') || question.includes('capital')) {
+      setSecAnswer('CapEx increased from $1.2B in fiscal 2026 to an expected $1.8B in fiscal 2027, a 50% increase tied to data centers, distributed job clusters, and inference infrastructure.');
+    } else if (question.includes('risk')) {
+      setSecAnswer('The main risk signal is execution intensity: the filing points to heavy infrastructure investment that could pressure margins if expected model and ingestion throughput gains do not arrive.');
+    } else {
+      setSecAnswer('The filing emphasizes infrastructure expansion for institutional risk modeling, catalyst prediction, and low-latency financial ingestion workflows.');
+    }
+    setSecLoading(false);
+  };
+
+  const handleTranscribe = async () => {
+    setTranscribing(true);
+    setAudioPlaying(true);
+    setTranscript(null);
+    await new Promise((resolve) => setTimeout(resolve, 900));
+    setTranscript('Management reiterated disciplined capital allocation while noting that demand for low-latency analytics remains resilient. The committee should monitor margin pressure from higher compute spend and watch for confirmation in the next 10-Q.');
+    setTranscribing(false);
+  };
+
+  const handleStopAudio = () => {
+    setAudioPlaying(false);
+    setTranscribing(false);
   };
 
   // Modify holdings locally
@@ -352,7 +486,7 @@ export default function GripperDashboard() {
                       Infrastructure Node
                     </label>
                     <select
-                      value={authInstId}
+                      value={selectedAuthInstId}
                       onChange={(e) => setAuthInstId(e.target.value)}
                       className="w-full bg-white/[0.03] border border-white/10 rounded-2xl py-3 px-4 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all appearance-none cursor-pointer"
                     >
@@ -417,6 +551,21 @@ export default function GripperDashboard() {
                           <option value="pm" className="bg-[#0A0D14]">Portfolio Manager (PM)</option>
                           <option value="admin" className="bg-[#0A0D14]">Systems Administrator</option>
                         </select>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 px-1">
+                          <CheckCircle size={12} className="text-cyan-500/70" />
+                          Graduation Year
+                        </label>
+                        <input
+                          type="number"
+                          min="2024"
+                          max="2045"
+                          value={authGradYear}
+                          onChange={(e) => setAuthGradYear(e.target.value === '' ? '' : Number(e.target.value))}
+                          placeholder="2027"
+                          className="w-full bg-white/[0.03] border border-white/10 rounded-2xl py-3 px-4 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all"
+                        />
                       </div>
                     </motion.div>
                   )}
@@ -548,9 +697,11 @@ export default function GripperDashboard() {
         <nav className="flex-1 space-y-2">
           {[
             { id: 'Dashboard', label: 'Compliance Hub', icon: Activity },
+            { id: 'Intelligence', label: 'Intelligence Center', icon: LayoutDashboard },
             { id: 'Portfolio', label: 'Portfolio Matrix', icon: Scale },
             { id: 'SEC Ingestion', label: 'Ingestion Pipeline', icon: Upload },
-            { id: 'Institutional Memory', label: 'Neural Search', icon: Search }
+            { id: 'Institutional Memory', label: 'Neural Search', icon: Search },
+            { id: 'Earnings', label: 'Earnings Terminal', icon: Mic2 }
           ].map((item) => {
             const isActive = activeTab === item.id;
             const Icon = item.icon;
@@ -603,8 +754,12 @@ export default function GripperDashboard() {
 
           <div className="flex gap-4">
             <button
-              onClick={() => evaluateCompliance(currentPortfolio!.id, currentInstitution!.id)}
-              disabled={isLoading}
+              type="button"
+              onClick={() => {
+                if (!currentPortfolio || !currentInstitution) return;
+                evaluateCompliance(currentPortfolio.id, currentInstitution.id);
+              }}
+              disabled={isLoading || !currentPortfolio || !currentInstitution}
               className="px-6 py-3.5 bg-white/[0.03] hover:bg-white/[0.08] border border-white/10 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all flex items-center gap-3 cursor-pointer disabled:opacity-50 active:scale-95"
             >
               <History size={14} className="text-cyan-400" />
@@ -715,6 +870,137 @@ export default function GripperDashboard() {
             </motion.div>
           )}
 
+          {activeTab === 'Intelligence' && (
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                {intelligenceStats.map((stat) => {
+                  const Icon = stat.trend === 'up' ? TrendingUp : stat.trend === 'down' ? TrendingDown : Activity;
+                  return (
+                    <div key={stat.label} className="bg-[#0A0D14] border border-white/5 p-6 rounded-[2rem] group hover:border-cyan-500/20 transition-all">
+                      <div className="flex justify-between items-start mb-3">
+                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{stat.label}</span>
+                        <Icon size={16} className={stat.trend === 'down' ? 'text-red-400' : stat.trend === 'up' ? 'text-emerald-400' : 'text-cyan-400'} />
+                      </div>
+                      <div className="flex items-end gap-2">
+                        <span className="text-3xl font-black font-mono text-white group-hover:text-cyan-400 transition-colors">{stat.value}</span>
+                        <span className={`text-[10px] font-black pb-1 ${stat.trend === 'down' ? 'text-red-400' : stat.trend === 'up' ? 'text-emerald-400' : 'text-slate-500'}`}>{stat.change}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div className="lg:col-span-2 bg-[#0A0D14] border border-white/5 rounded-[2.5rem] p-10 space-y-8">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-lg font-black text-white tracking-tight flex items-center gap-3">
+                        <BarChart3 size={20} className="text-cyan-400" />
+                        Market Catalyst Probability
+                      </h3>
+                      <p className="text-[10px] text-slate-500 mt-2 font-black uppercase tracking-widest">Predictive signal monitor</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
+                      <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Ingesting</span>
+                    </div>
+                  </div>
+                  <div className="space-y-5">
+                    {catalystSignals.map((signal) => (
+                      <div key={signal.name} className="grid grid-cols-[120px_1fr_72px] items-center gap-5">
+                        <span className="text-xs font-black text-slate-300">{signal.name}</span>
+                        <div className="h-5 bg-white/[0.03] rounded-full overflow-hidden border border-white/5">
+                          <div
+                            className={`h-full rounded-full ${signal.probability > 60 ? 'bg-emerald-400' : 'bg-cyan-500'}`}
+                            style={{ width: `${signal.probability}%` }}
+                          />
+                        </div>
+                        <div className="text-right">
+                          <span className="block text-sm font-black font-mono text-white">{signal.probability}%</span>
+                          <span className="block text-[8px] text-slate-600 font-black uppercase">{signal.impact}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="bg-[#0A0D14] border border-white/5 rounded-[2.5rem] p-8 space-y-6">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-black text-white uppercase tracking-widest flex items-center gap-2">
+                      <Newspaper size={16} className="text-cyan-400" />
+                      Risk Feed
+                    </h3>
+                    <span className="text-[9px] font-black text-slate-500 border border-white/10 rounded-full px-3 py-1 uppercase">Live</span>
+                  </div>
+                  <div className="space-y-4">
+                    {newsFeed.map((item) => (
+                      <div key={item.id} className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 hover:border-cyan-500/20 transition-all">
+                        <div className="flex justify-between gap-4 mb-2">
+                          <span className="text-[9px] font-black text-cyan-400/70 uppercase tracking-widest">{item.source} / {item.time}</span>
+                          {!item.risk && (
+                            <button
+                              onClick={() => handleAnalyzeNews(item.id, item.content)}
+                              disabled={analyzingNewsId === item.id}
+                              className="text-[9px] font-black text-emerald-400 uppercase tracking-widest disabled:opacity-50"
+                            >
+                              {analyzingNewsId === item.id ? 'Auditing...' : 'Audit'}
+                            </button>
+                          )}
+                        </div>
+                        <h4 className="text-xs font-black text-slate-200 leading-relaxed">{item.headline}</h4>
+                        {item.risk && (
+                          <div className="mt-3 pt-3 border-t border-white/5 space-y-2">
+                            <div className="flex flex-wrap gap-2">
+                              {item.risk.categories.map((category) => (
+                                <span key={category} className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest border ${item.risk?.level === 'high' ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-amber-500/10 text-amber-400 border-amber-500/20'}`}>
+                                  {category}
+                                </span>
+                              ))}
+                            </div>
+                            <p className="text-[11px] text-slate-500 leading-relaxed">{item.risk.justification}</p>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="lg:col-span-3 bg-[#0A0D14] border border-white/5 rounded-[2.5rem] p-10 space-y-6">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-black text-white tracking-tight flex items-center gap-3">
+                      <FileText size={20} className="text-cyan-400" />
+                      SEC Intelligence Engine
+                    </h3>
+                    <span className="text-[10px] font-mono text-slate-500 bg-white/[0.03] px-3 py-1.5 rounded-xl border border-white/5">DOC_ID: 10K-AXIOM-2026</span>
+                  </div>
+                  <div className="p-5 rounded-2xl bg-[#05070A] border border-white/5 font-mono text-xs leading-relaxed text-slate-400 whitespace-pre-line max-h-44 overflow-y-auto">
+                    <span className="text-cyan-400 font-black">DOCUMENT PREVIEW:</span>{'\n'}{sampleFiling}
+                  </div>
+                  <form onSubmit={handleAskSecQuestion} className="flex gap-4">
+                    <input
+                      value={secQuestion}
+                      onChange={(e) => setSecQuestion(e.target.value)}
+                      placeholder="Ask about CapEx, risks, or guidance..."
+                      className="flex-1 bg-white/[0.03] border border-white/10 rounded-2xl py-4 px-5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-cyan-500/50"
+                    />
+                    <button type="submit" disabled={secLoading} className="px-6 py-4 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white rounded-2xl transition-all">
+                      {secLoading ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
+                    </button>
+                  </form>
+                  {secAnswer && (
+                    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="p-5 rounded-2xl bg-emerald-500/5 border border-emerald-500/20">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">AI Insights Response</span>
+                      </div>
+                      <p className="text-sm text-slate-300 leading-relaxed">{secAnswer}</p>
+                    </motion.div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          )}
+
           {activeTab === 'Portfolio' && (
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               <div className="lg:col-span-2 bg-[#0A0D14] border border-white/5 rounded-[2.5rem] p-10 space-y-10">
@@ -726,24 +1012,38 @@ export default function GripperDashboard() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-white/[0.02] p-6 rounded-[2rem] border border-white/5 items-end">
-                  {[
-                    { label: 'Asset Ticker', type: 'text', val: newTicker, set: setNewTicker, ph: 'NVDA' },
-                    { label: 'Weight (%)', type: 'number', val: newWeight, set: setNewWeight, ph: '10' },
-                    { label: 'Cost Basis ($)', type: 'number', val: newCostBasis, set: setNewCostBasis, ph: '120' }
-                  ].map((field, i) => (
-                    <div key={i} className="space-y-2">
-                      <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest px-1">{field.label}</label>
-                      <input 
-                        type={field.type} 
-                        value={field.val}
-                        onChange={(e) => field.set(e.target.value as any)}
-                        placeholder={field.ph}
-                        className="w-full bg-[#05070A] border border-white/10 rounded-xl py-2.5 px-4 text-xs text-white focus:outline-none focus:ring-1 focus:ring-cyan-500/50"
-                      />
-                    </div>
-                  ))}
+                  <div className="space-y-2">
+                    <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest px-1">Asset Ticker</label>
+                    <input
+                      type="text"
+                      value={newTicker}
+                      onChange={(e) => setNewTicker(e.target.value)}
+                      placeholder="NVDA"
+                      className="w-full bg-[#05070A] border border-white/10 rounded-xl py-2.5 px-4 text-xs text-white focus:outline-none focus:ring-1 focus:ring-cyan-500/50"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest px-1">Weight (%)</label>
+                    <input
+                      type="number"
+                      value={newWeight}
+                      onChange={(e) => setNewWeight(Number(e.target.value))}
+                      placeholder="10"
+                      className="w-full bg-[#05070A] border border-white/10 rounded-xl py-2.5 px-4 text-xs text-white focus:outline-none focus:ring-1 focus:ring-cyan-500/50"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest px-1">Cost Basis ($)</label>
+                    <input
+                      type="number"
+                      value={newCostBasis}
+                      onChange={(e) => setNewCostBasis(Number(e.target.value))}
+                      placeholder="120"
+                      className="w-full bg-[#05070A] border border-white/10 rounded-xl py-2.5 px-4 text-xs text-white focus:outline-none focus:ring-1 focus:ring-cyan-500/50"
+                    />
+                  </div>
                   <button onClick={addDraftHolding} className="w-full bg-cyan-600 hover:bg-cyan-500 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest text-white transition-all shadow-lg shadow-cyan-900/10 cursor-pointer">
-                    Integrate
+                    <span className="inline-flex items-center justify-center gap-2"><Plus size={14} /> Integrate</span>
                   </button>
                 </div>
 
@@ -774,10 +1074,22 @@ export default function GripperDashboard() {
                   <button onClick={() => setSimulationActive(!simulationActive)} className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${simulationActive ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20' : 'bg-white/[0.02] text-slate-500 hover:text-slate-300'}`}>
                     {simulationActive ? 'Disable Scenario' : 'Hypothetical Sandbox'}
                   </button>
+                  {simulationActive && (
+                    <button onClick={handleSandboxSimulate} disabled={isLoading} className="px-6 py-3 rounded-2xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-black uppercase tracking-widest disabled:opacity-50">
+                      Run Simulation
+                    </button>
+                  )}
                   <button onClick={commitHoldings} disabled={isLoading} className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-black py-4 px-10 rounded-2xl text-[11px] uppercase tracking-widest transition-all shadow-xl shadow-cyan-900/20 disabled:opacity-50 cursor-pointer active:scale-95">
                     Commit Changeset
                   </button>
                 </div>
+                {simulationTriggered && (
+                  <div className={`p-5 rounded-2xl border text-xs font-bold ${simulatedViolations.length > 0 ? 'bg-red-500/5 border-red-500/20 text-red-300' : 'bg-emerald-500/5 border-emerald-500/20 text-emerald-300'}`}>
+                    {simulatedViolations.length > 0
+                      ? `${simulatedViolations.length} hypothetical breach${simulatedViolations.length === 1 ? '' : 'es'} detected before commit.`
+                      : 'Simulation completed with no hypothetical breaches.'}
+                  </div>
+                )}
               </div>
 
               {/* Sector Exposure Chart */}
@@ -923,6 +1235,102 @@ export default function GripperDashboard() {
                         </p>
                       </div>
                     ))}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
+
+          {activeTab === 'Earnings' && (
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              <div className="bg-[#0A0D14] border border-white/5 rounded-[2.5rem] p-10 space-y-8">
+                <div>
+                  <h3 className="text-sm font-black text-cyan-400 uppercase tracking-widest flex items-center gap-2">
+                    <Volume2 size={16} />
+                    Live Audio Ingestion
+                  </h3>
+                  <p className="text-[10px] text-slate-500 mt-2 font-black uppercase tracking-widest">Earnings and Fed call monitor</p>
+                </div>
+                <div className="aspect-video bg-black/30 rounded-[2rem] flex flex-col items-center justify-center p-8 text-center border border-white/5 relative overflow-hidden group">
+                  <div className="absolute inset-0 flex items-center justify-center opacity-20 group-hover:opacity-40 transition-opacity">
+                    <div className="flex gap-1 h-24 items-end">
+                      {Array.from({ length: 12 }).map((_, i) => (
+                        <motion.div
+                          key={i}
+                          animate={{ height: [10, 40, 16, 72, 24] }}
+                          transition={{ repeat: Infinity, duration: 1, delay: i * 0.1 }}
+                          className="w-2 bg-cyan-400 rounded-t"
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  <div className="z-10 space-y-4">
+                    <div className="w-16 h-16 rounded-full bg-cyan-500/20 flex items-center justify-center mx-auto ring-4 ring-cyan-500/10">
+                      <Mic2 size={32} className="text-cyan-400" />
+                    </div>
+                    <div>
+                      <h4 className="font-black text-white uppercase tracking-tight">Fed Press Briefing</h4>
+                      <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest">Speaker: Jerome Powell</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center justify-center gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setAudioPlaying(true)}
+                    disabled={audioPlaying}
+                    className="h-11 w-11 rounded-full border border-white/10 bg-white/[0.03] hover:bg-white/[0.07] disabled:opacity-50 flex items-center justify-center text-slate-300"
+                    title="Start audio feed"
+                  >
+                    <Play size={16} className="fill-current" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleStopAudio}
+                    disabled={!audioPlaying && !transcribing}
+                    className="h-11 w-11 rounded-full border border-white/10 bg-white/[0.03] hover:bg-white/[0.07] disabled:opacity-50 flex items-center justify-center text-slate-300"
+                    title="Stop audio feed"
+                  >
+                    <Square size={15} className="fill-current" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleTranscribe}
+                    disabled={transcribing}
+                    className="px-8 py-3 rounded-2xl bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white text-[10px] font-black uppercase tracking-widest flex items-center gap-2"
+                  >
+                    {transcribing ? <Loader2 size={15} className="animate-spin" /> : <FastForward size={15} />}
+                    Transcribe
+                  </button>
+                </div>
+              </div>
+
+              <div className="lg:col-span-2 bg-[#0A0D14] border border-white/5 rounded-[2.5rem] p-10 min-h-[520px] space-y-8">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-black text-cyan-400 uppercase tracking-widest flex items-center gap-2">
+                    <Cpu size={16} />
+                    ASR Transcription Feed
+                  </h3>
+                  <div className="flex items-center gap-2">
+                    <span className={`w-2 h-2 rounded-full ${audioPlaying || transcribing ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`} />
+                    <span className={`text-[10px] font-black uppercase tracking-widest ${audioPlaying || transcribing ? 'text-emerald-400' : 'text-slate-500'}`}>
+                      {transcribing ? 'Transcribing' : audioPlaying ? 'Live' : 'Standby'}
+                    </span>
+                  </div>
+                </div>
+                {transcript ? (
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4 font-mono text-sm leading-relaxed">
+                    <p className="p-5 rounded-2xl bg-white/[0.03] border border-white/5 text-slate-300">
+                      <span className="text-emerald-400 font-black">[00:00:12] JP:</span> Our primary objective remains stable prices and full employment. Recent data suggests cooling, but consumer spending is persistent.
+                    </p>
+                    <p className="p-5 rounded-2xl bg-white/[0.03] border border-white/5 text-slate-300">
+                      <span className="text-emerald-400 font-black">[00:01:45] CFO:</span> {transcript}
+                    </p>
+                  </motion.div>
+                ) : (
+                  <div className="min-h-[360px] flex flex-col items-center justify-center text-slate-600 space-y-4">
+                    <Mic2 size={48} className="opacity-30" />
+                    <p className="text-sm italic">Initiate transcription to view speech-to-text conversion.</p>
                   </div>
                 )}
               </div>

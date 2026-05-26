@@ -34,6 +34,8 @@ class User(Base):
     external_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True) # Clerk or Auth0 identifier
     role: Mapped[str] = mapped_column(String(50), nullable=False) # analyst, sector_lead, pm, faculty, trustee, admin
     graduation_year: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    verification_code: Mapped[Optional[str]] = mapped_column(String(6), nullable=True)
     permissions: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True) # JSON array of permissions
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=text("TIMEZONE('utc', NOW())"))
 

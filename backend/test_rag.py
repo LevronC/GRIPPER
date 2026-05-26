@@ -48,6 +48,9 @@ def run_burst_worker():
         test_queue.remove(job.id)
 
 def test_rag_pipeline():
+    app.api.endpoints.queue = test_queue
+    test_queue.empty()
+
     # 1. Paths for mock files
     stetson_file = "stetson_report.pdf"
     uf_file = "uf_report.pdf"
@@ -99,6 +102,15 @@ def test_rag_pipeline():
             }
         )
         assert reg_response.status_code == 201
+
+        with SuperSession() as s_db:
+            stetson_user = s_db.query(models.User).filter(models.User.email == "analyst@stetson.edu").one()
+            stetson_code = stetson_user.verification_code
+        verify_response = client.post(
+            "/auth/verify",
+            json={"email": "analyst@stetson.edu", "code": stetson_code}
+        )
+        assert verify_response.status_code == 200
         
         print("[Auth] Logging in as Stetson user...")
         login_response = client.post(
@@ -128,6 +140,15 @@ def test_rag_pipeline():
             }
         )
         assert reg_response.status_code == 201
+
+        with SuperSession() as s_db:
+            uf_user = s_db.query(models.User).filter(models.User.email == "analyst@uf.edu").one()
+            uf_code = uf_user.verification_code
+        verify_response = client.post(
+            "/auth/verify",
+            json={"email": "analyst@uf.edu", "code": uf_code}
+        )
+        assert verify_response.status_code == 200
         
         print("[Auth] Logging in as UF user...")
         login_response = client.post(
