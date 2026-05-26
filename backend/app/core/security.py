@@ -1,8 +1,13 @@
 from datetime import datetime, timedelta
 from typing import Any, Union
+import uuid
 from jose import jwt
 import bcrypt
+from redis import Redis
 from app.core.config import settings
+
+# Initialize Redis client for token blacklisting
+redis_client = Redis.from_url(settings.REDIS_URL)
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     try:
@@ -22,6 +27,24 @@ def create_access_token(subject: Union[str, Any], expires_delta: timedelta = Non
     else:
         expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     
-    to_encode = {"exp": expire, "sub": str(subject)}
+    # Generate unique JTI for this token to support server-side revocation
+    token_jti = str(uuid.uuid4())
+    to_encode = {
+        "exp": expire, 
+        "sub": str(subject),
+        "jti": token_jti
+    }
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
+
+def blacklist_token(token_jti: str, expire_seconds: int):
+    """
+    Store blacklisted token ID in Redis with expiration.
+    """
+    redis_client.setex(f"token_blacklist:{token_jti}", expire_seconds, "1")
+
+def is_token_blacklisted(token_jti: str) -> bool:
+    """
+    Check if a token ID exists in the Redis blacklist.
+    """
+    return redis_client.exists(f"token_blacklist:{token_jti}") > 0

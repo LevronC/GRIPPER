@@ -3,7 +3,7 @@ from datetime import datetime
 import logging
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, text
 
 from app.models import Portfolio, Holding, IPSRule, GovernanceEvent
 from app.services.governance.rules import (
@@ -142,6 +142,10 @@ def evaluate_portfolio_compliance(
             
     db.commit()
     
+    # Re-set transaction-scoped RLS context after commit because SET LOCAL is cleared.
+    # This is required so that we can read back the objects (e.g. created_at) for the return list.
+    db.execute(text("SET LOCAL app.current_institution_id = :inst_id"), {"inst_id": str(institution_id)})
+
     # Format return list
     return [
         {

@@ -16,16 +16,15 @@ def get_db(request: Request = None) -> Generator:
         tenant_id = request.headers.get("X-Institution-ID")
     try:
         if tenant_id:
-            # We execute SET to configure the session variable.
-            # In PostgreSQL, RLS policies will reference 'app.current_institution_id'.
-            # Session-scoped variables survive commits, which is required for SQLAlchemy
-            # to reload newly committed objects under RLS rules.
+            # We execute SET LOCAL to configure the transaction-scoped variable.
+            # This ensures that connection poolers (like PgBouncer in transaction mode) 
+            # cannot leak tenant context across pooled connections.
             db.execute(
-                text("SET app.current_institution_id = :tenant_id"),
+                text("SET LOCAL app.current_institution_id = :tenant_id"),
                 {"tenant_id": tenant_id}
             )
         else:
-            db.execute(text("SET app.current_institution_id = ''"))
+            db.execute(text("SET LOCAL app.current_institution_id = ''"))
         yield db
         db.commit()
     except Exception:

@@ -1,15 +1,21 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
-from sqlalchemy import select
+from sqlalchemy import select, text, create_engine
+from sqlalchemy.orm import Session, sessionmaker
 from pydantic import BaseModel, EmailStr
 import uuid
 from typing import Optional
+from datetime import datetime
+from jose import jwt
 
 from app.db.session import get_db
 from app import models
 from app.core import security
+from app.core.config import settings
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+reusable_oauth2 = HTTPBearer(auto_error=False)
 
 class UserRegister(BaseModel):
     email: EmailStr
@@ -68,7 +74,14 @@ def register_user(user_in: UserRegister, db: Session = Depends(get_db)):
         graduation_year=user_in.graduation_year
     )
     db.add(db_user)
+    
+    # We must set the context before commit so that the insert is associated with the tenant
+    db.execute(text("SET LOCAL app.current_institution_id = :inst_id"), {"inst_id": str(user_in.institution_id)})
     db.commit()
+    
+    # We must re-set context after commit because SET LOCAL is cleared on commit, 
+    # and refresh() needs the context to fetch the record back.
+    db.execute(text("SET LOCAL app.current_institution_id = :inst_id"), {"inst_id": str(user_in.institution_id)})
     db.refresh(db_user)
 
     return {
@@ -80,7 +93,16 @@ def register_user(user_in: UserRegister, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=Token)
 def login_user(credentials: UserLogin, db: Session = Depends(get_db)):
-    db_user = db.query(models.User).filter(models.User.email == credentials.email).first()
+    # To bypass RLS during login (since we don't know the tenant yet), 
+    # we use a temporary superuser session for the lookup.
+    # In a production environment, this would be handled by a specific 
+    # auth service or a DB role with bypassrls permissions.
+    super_engine = create_engine(settings.DATABASE_URL.replace("gripper_app:gripper_secure", "civicpulse:civicpulse"))
+    SuperSession = sessionmaker(bind=super_engine)
+    
+    with SuperSession() as super_db:
+        db_user = super_db.query(models.User).filter(models.User.email == credentials.email).first()
+    
     if not db_user or not db_user.hashed_password:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -103,3 +125,29 @@ def login_user(credentials: UserLogin, db: Session = Depends(get_db)):
         "role": db_user.role,
         "institution_id": str(db_user.institution_id)
     }
+
+@router.post("/logout")
+def logout(token_creds: Optional[HTTPAuthorizationCredentials] = Depends(reusable_oauth2)):
+    """
+    Invalidates the current token by adding its JTI to the Redis blacklist.
+    """
+    if not token_creds:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+    
+    token = token_creds.credentials
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        token_jti = payload.get("jti")
+        exp = payload.get("exp")
+        
+        if token_jti and exp:
+            # Calculate remaining seconds until token naturally expires
+            now = datetime.utcnow().timestamp()
+            ttl = int(exp - now)
+            if ttl > 0:
+                security.blacklist_token(token_jti, ttl)
+    except Exception:
+        # If token is already invalid or malformed, we just return success
+        pass
+        
+    return {"message": "Successfully logged out"}

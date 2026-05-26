@@ -1,5 +1,6 @@
 import uuid
 import logging
+import hashlib
 from sqlalchemy.orm import Session
 from app.services.parsing.parser import parse_pdf
 from app.services.ingestion.chunker import chunk_document_pages
@@ -8,19 +9,59 @@ from app.models import DocumentChunk, ResearchReport
 
 logger = logging.getLogger(__name__)
 
+def calculate_sha256(file_path: str) -> str:
+    """Calculate SHA-256 hash of a file."""
+    sha256_hash = hashlib.sha256()
+    with open(file_path, "rb") as f:
+        for byte_block in iter(lambda: f.read(4096), b""):
+            sha256_hash.update(byte_block)
+    return sha256_hash.hexdigest()
+
 def ingest_document(db: Session, report_id: uuid.UUID, file_path: str, institution_id: uuid.UUID) -> int:
     """
     Ingests a document:
-    1. Parses PDF to get text pages.
-    2. Chunks page text with overlap while preserving citations.
-    3. Generates 384-dimensional normalized vector embeddings in a batch.
-    4. Saves chunks + embeddings to the database.
-    5. Updates ResearchReport status to 'processed'.
+    1. Calculates SHA-256 hash and checks for duplicates within the same institution.
+    2. Parses PDF to get text pages.
+    3. Chunks page text with overlap while preserving citations.
+    4. Generates 384-dimensional normalized vector embeddings in a batch.
+    5. Saves chunks + embeddings to the database.
+    6. Updates ResearchReport status to 'processed'.
     """
     logger.info(f"Starting ingestion for report {report_id} from {file_path}")
     
     try:
-        # 1. Parse PDF pages
+        # 1. Calculate hash and check for duplicates
+        file_hash = calculate_sha256(file_path)
+        
+        # Check if this institution already has this document processed
+        existing_report = (
+            db.query(ResearchReport)
+            .filter(
+                ResearchReport.institution_id == institution_id,
+                ResearchReport.file_hash == file_hash,
+                ResearchReport.status == "processed",
+                ResearchReport.id != report_id
+            )
+            .first()
+        )
+        
+        if existing_report:
+            logger.info(f"Duplicate document found (ID: {existing_report.id}). Skipping ingestion.")
+            # Link current report to hash and mark as processed
+            report = db.query(ResearchReport).filter(ResearchReport.id == report_id).first()
+            if report:
+                report.file_hash = file_hash
+                report.status = "processed"
+                db.commit()
+            return 0
+
+        # Update current report with hash
+        report = db.query(ResearchReport).filter(ResearchReport.id == report_id).first()
+        if report:
+            report.file_hash = file_hash
+            db.flush()
+
+        # 2. Parse PDF pages
         pages = parse_pdf(file_path)
         logger.info(f"Parsed {len(pages)} pages from {file_path}")
         

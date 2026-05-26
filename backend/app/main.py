@@ -25,6 +25,14 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(api_router)
 
+@app.get("/")
+def root():
+    return {
+        "message": "Gripper Risk Terminal API is running",
+        "docs": "/docs",
+        "health": "/health"
+    }
+
 @app.get("/health")
 def health_check():
     return {"status": "healthy", "service": "gripper-backend"}
@@ -87,8 +95,19 @@ def list_portfolios(db: Session = Depends(get_db), current_user = Depends(get_cu
     ]
 
 @app.get("/institutions")
-def list_institutions(db: Session = Depends(get_db)):
-    institutions = db.query(models.Institution).all()
+def list_institutions(db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """
+    Returns list of institutions. 
+    - If unauthenticated (sign-in/sign-up): returns all available tenants.
+    - If authenticated: returns ONLY the user's bound institution for security.
+    """
+    if current_user:
+        # Enforce strict isolation: even if RLS is on the table, we filter explicitly here.
+        institutions = db.query(models.Institution).filter(models.Institution.id == current_user.institution_id).all()
+    else:
+        # For public signup/login dropdown
+        institutions = db.query(models.Institution).all()
+        
     return [
         {
             "id": str(i.id),

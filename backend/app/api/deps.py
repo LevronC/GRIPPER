@@ -1,12 +1,13 @@
 from fastapi import Depends, HTTPException, status, Header
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import jwt, JWTError
-from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy import text, create_engine
 import uuid
 from typing import Optional, List
 
 from app.core.config import settings
+from app.core import security
 from app.db.session import get_db
 from app import models
 
@@ -28,10 +29,18 @@ def get_current_user(
         try:
             payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
             user_id = payload.get("sub")
+            token_jti = payload.get("jti")
             if user_id is None:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Could not validate credentials: sub claim missing",
+                )
+            
+            # Check if token has been revoked via Redis blacklist
+            if token_jti and security.is_token_blacklisted(token_jti):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Token has been revoked",
                 )
         except JWTError:
             raise HTTPException(
@@ -39,15 +48,20 @@ def get_current_user(
                 detail="Could not validate credentials: JWT invalid or expired",
             )
         
-        user = db.query(models.User).filter(models.User.id == uuid.UUID(user_id)).first()
+        # Bypass RLS for user lookup because we don't have the tenant context yet
+        super_engine = create_engine(settings.DATABASE_URL.replace("gripper_app:gripper_secure", "civicpulse:civicpulse"))
+        SuperSession = sessionmaker(bind=super_engine)
+        with SuperSession() as super_db:
+            user = super_db.query(models.User).filter(models.User.id == uuid.UUID(user_id)).first()
+            
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="User not found",
             )
         
-        # Enforce Postgres session-scoped RLS context using the user's bound institution
-        db.execute(text("SET app.current_institution_id = :inst_id"), {"inst_id": str(user.institution_id)})
+        # Enforce Postgres transaction-scoped RLS context using the user's bound institution
+        db.execute(text("SET LOCAL app.current_institution_id = :inst_id"), {"inst_id": str(user.institution_id)})
         return user
     
     # Fallback to header if no token credentials are provided (for backward compatibility)
@@ -60,7 +74,7 @@ def get_current_user(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid X-Institution-ID UUID format"
             )
-        db.execute(text("SET app.current_institution_id = :inst_id"), {"inst_id": x_institution_id})
+        db.execute(text("SET LOCAL app.current_institution_id = :inst_id"), {"inst_id": x_institution_id})
         return None
     
     return None

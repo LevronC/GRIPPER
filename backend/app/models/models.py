@@ -82,6 +82,7 @@ class ResearchReport(Base):
     company: Mapped[str] = mapped_column(String(255), nullable=False) # Company Name / Ticker
     recommendation: Mapped[str] = mapped_column(String(50), nullable=False) # buy, hold, sell
     status: Mapped[str] = mapped_column(String(50), default="draft") # draft, pending_review, approved, rejected
+    file_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True) # SHA-256 hash
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=text("TIMEZONE('utc', NOW())"))
 
     # Relationships

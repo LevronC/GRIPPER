@@ -1,6 +1,6 @@
 import uuid
 from typing import List, Dict, Any
-from sqlalchemy import select, or_
+from sqlalchemy import select, or_, text, func
 from sqlalchemy.orm import Session
 from app.models import DocumentChunk, ResearchReport
 from app.services.embeddings.generator import generate_query_embedding
@@ -17,7 +17,9 @@ def search_documents(
 ) -> List[Dict[str, Any]]:
     """
     Executes a hybrid (Vector + Keyword) multi-tenant similarity search against document_chunks.
-    Combines results using Reciprocal Rank Fusion (RRF).
+    - Uses pgvector for semantic similarity.
+    - Uses PostgreSQL Full-Text Search (TSVector) for keyword matching.
+    - Combines results using Reciprocal Rank Fusion (RRF).
     """
     if not query.strip():
         return []
@@ -36,7 +38,7 @@ def search_documents(
         .join(ResearchReport, DocumentChunk.report_id == ResearchReport.id)
         .filter(DocumentChunk.institution_id == institution_id)
         .order_by(distance_expr)
-        .limit(limit * 2) # Fetch slightly more to allow hybrid overlap
+        .limit(limit * 3) # Fetch more to allow for hybrid overlap
     )
     
     vector_results = db.execute(vector_stmt).all()
@@ -58,55 +60,58 @@ def search_documents(
             "report_id": str(chunk.report_id)
         })
 
-    # --- 2. Keyword/Exact Phrase Match (BM25 Equivalent) ---
-    words = [w.strip().lower() for w in query.split() if len(w.strip()) >= 3]
-    text_docs = []
-    if words:
-        # Build search expressions for SQL ILIKE matching
-        conditions = [DocumentChunk.content.ilike(f"%{w}%") for w in words]
-        
-        text_stmt = (
-            select(
-                DocumentChunk,
-                ResearchReport.company,
-                ResearchReport.sector
-            )
-            .join(ResearchReport, DocumentChunk.report_id == ResearchReport.id)
-            .filter(DocumentChunk.institution_id == institution_id)
-            .filter(or_(*conditions))
-            .limit(limit * 2)
+    # --- 2. Full-Text Search (BM25 Equivalent) ---
+    # We use PostgreSQL's native tsvector and ts_rank for keyword relevance.
+    # Note: Ensure a GIN index exists on to_tsvector('english', content) for production speed.
+    ts_query = func.plainto_tsquery('english', query)
+    ts_vector = func.to_tsvector('english', DocumentChunk.content)
+    
+    text_stmt = (
+        select(
+            DocumentChunk,
+            ResearchReport.company,
+            ResearchReport.sector,
+            func.ts_rank(ts_vector, ts_query).label("rank")
         )
-        text_results = db.execute(text_stmt).all()
-        for row in text_results:
-            chunk = row[0]
-            company = row[1]
-            sector = row[2]
-            
-            # Simple keyword matching score based on word occurrence count
-            match_count = sum(1 for w in words if w in chunk.content.lower())
-            
-            text_docs.append({
-                "chunk_id": str(chunk.id),
-                "content": chunk.content,
-                "page": chunk.metadata_json.get("page") if chunk.metadata_json else None,
-                "company": company,
-                "sector": sector,
-                "similarity": 0.5 + (0.1 * match_count), # Normalise baseline similarity for keyword matches
-                "report_id": str(chunk.report_id)
-            })
+        .join(ResearchReport, DocumentChunk.report_id == ResearchReport.id)
+        .filter(DocumentChunk.institution_id == institution_id)
+        .filter(ts_vector.op('@@')(ts_query))
+        .order_by(text("rank DESC"))
+        .limit(limit * 3)
+    )
+    
+    text_results = db.execute(text_stmt).all()
+    text_docs = []
+    for row in text_results:
+        chunk = row[0]
+        company = row[1]
+        sector = row[2]
+        rank = row[3]
+        
+        text_docs.append({
+            "chunk_id": str(chunk.id),
+            "content": chunk.content,
+            "page": chunk.metadata_json.get("page") if chunk.metadata_json else None,
+            "company": company,
+            "sector": sector,
+            "similarity": float(rank), 
+            "report_id": str(chunk.report_id)
+        })
 
     # --- 3. Reciprocal Rank Fusion (RRF) ---
     rrf_scores = {}
     docs_map = {}
     
-    # RRF parameter
+    # RRF parameter (K=60 is standard in literature)
     K = 60.0
     
+    # Process vector results
     for rank, doc in enumerate(vector_docs):
         cid = doc["chunk_id"]
         docs_map[cid] = doc
         rrf_scores[cid] = rrf_scores.get(cid, 0.0) + (1.0 / (K + rank + 1))
         
+    # Process text results
     for rank, doc in enumerate(text_docs):
         cid = doc["chunk_id"]
         if cid not in docs_map:
@@ -120,7 +125,6 @@ def search_documents(
     final_results = []
     for cid in sorted_chunk_ids[:limit]:
         doc = docs_map[cid]
-        # Include RRF score for transparency / observability
         doc["rrf_score"] = rrf_scores[cid]
         final_results.append(doc)
         
