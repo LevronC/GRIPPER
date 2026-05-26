@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, ShieldAlert, Sparkles, FileText, Bookmark, Info } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import type { Violation } from '../store/useStore';
+import { apiUrl } from '../lib/api';
 
 interface Evidence {
   report_id: string;
@@ -42,7 +43,7 @@ export default function ExplainabilityDrawer({ violation, institutionId, onClose
       setError(null);
       setResult(null);
       try {
-        const res = await fetch(`http://localhost:8000/violations/${violation.id}/explain`, {
+        const res = await fetch(apiUrl(`/violations/${violation.id}/explain`), {
           method: 'POST',
           headers: {
             'X-Institution-ID': institutionId,

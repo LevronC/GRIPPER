@@ -40,6 +40,7 @@ import {
 import { useStore } from '../store/useStore';
 import type { Holding, Violation } from '../store/useStore';
 import ExplainabilityDrawer from './ExplainabilityDrawer';
+import { apiUrl } from '../lib/api';
 
 // Static metadata of sectors for mapping
 const SECTORS = ['Technology', 'Financials', 'Consumer Cyclical', 'Energy', 'Healthcare', 'Communication Services', 'Other'];
@@ -239,7 +240,7 @@ export default function GripperDashboard() {
     } else {
       // Verification mode
       try {
-        const res = await fetch('http://localhost:8000/auth/verify', {
+        const res = await fetch(apiUrl('/auth/verify'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email: authEmail, code: authCode })
@@ -274,7 +275,7 @@ export default function GripperDashboard() {
 
     try {
       setUploadStatus({ type: 'success', msg: 'Uploading...' });
-      const res = await fetch('http://localhost:8000/documents/upload', {
+      const res = await fetch(apiUrl('/documents/upload'), {
         method: 'POST',
         headers: {
           'X-Institution-ID': currentInstitution.id,
@@ -304,7 +305,7 @@ export default function GripperDashboard() {
 
     setIsSearching(true);
     try {
-      const res = await fetch('http://localhost:8000/search/semantic', {
+      const res = await fetch(apiUrl('/search/semantic'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

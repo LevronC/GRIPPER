@@ -17,8 +17,11 @@ settings = Settings()
 
 # Calculate default upload dir if not set in environment
 if not settings.UPLOAD_DIR:
-    backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
-    settings.UPLOAD_DIR = os.path.join(backend_dir, "storage", "uploads")
+    if os.getenv("VERCEL") == "1":
+        settings.UPLOAD_DIR = "/tmp/gripper_uploads"
+    else:
+        backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+        settings.UPLOAD_DIR = os.path.join(backend_dir, "storage", "uploads")
 
 # Ensure the upload directory exists
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)

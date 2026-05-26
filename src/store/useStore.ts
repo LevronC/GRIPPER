@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { apiUrl } from '../lib/api';
 
 export interface Institution {
   id: string;
@@ -94,8 +95,6 @@ interface GripperState {
   saveHoldings: (portfolioId: string, instId: string, holdings: Holding[]) => Promise<void>;
 }
 
-const API_BASE = 'http://localhost:8000';
-
 // Retrieve initial values from localStorage safely
 const savedToken = localStorage.getItem('gripper_token');
 let savedUser = null;
@@ -158,7 +157,7 @@ export const useStore = create<GripperState>((set, get) => {
     login: async (email, password, instId) => {
       set({ isLoading: true });
       try {
-        const res = await fetch(`${API_BASE}/auth/login`, {
+        const res = await fetch(apiUrl('/auth/login'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -200,7 +199,7 @@ export const useStore = create<GripperState>((set, get) => {
     register: async (email, password, instId, role, graduationYear) => {
       set({ isLoading: true });
       try {
-        const res = await fetch(`${API_BASE}/auth/register`, {
+        const res = await fetch(apiUrl('/auth/register'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -247,7 +246,7 @@ export const useStore = create<GripperState>((set, get) => {
     fetchInstitutions: async () => {
       set({ isLoading: true });
       try {
-        const res = await fetch(`${API_BASE}/institutions`);
+        const res = await fetch(apiUrl('/institutions'));
         if (res.ok) {
           const data = await res.json();
           set({ institutions: data });
@@ -274,7 +273,7 @@ export const useStore = create<GripperState>((set, get) => {
 
     fetchPortfolios: async (instId) => {
       try {
-        const res = await fetch(`${API_BASE}/portfolios`, {
+        const res = await fetch(apiUrl('/portfolios'), {
           headers: getHeaders(instId)
         });
         if (res.ok) {
@@ -291,7 +290,7 @@ export const useStore = create<GripperState>((set, get) => {
 
     fetchHoldings: async (portfolioId, instId) => {
       try {
-        const res = await fetch(`${API_BASE}/portfolios/${portfolioId}/holdings`, {
+        const res = await fetch(apiUrl(`/portfolios/${portfolioId}/holdings`), {
           headers: getHeaders(instId)
         });
         if (res.ok) {
@@ -305,7 +304,7 @@ export const useStore = create<GripperState>((set, get) => {
 
     fetchViolations: async (portfolioId, instId) => {
       try {
-        const res = await fetch(`${API_BASE}/portfolios/${portfolioId}/violations?resolved=false`, {
+        const res = await fetch(apiUrl(`/portfolios/${portfolioId}/violations?resolved=false`), {
           headers: getHeaders(instId)
         });
         if (res.ok) {
@@ -319,7 +318,7 @@ export const useStore = create<GripperState>((set, get) => {
 
     fetchResolvedViolations: async (portfolioId, instId) => {
       try {
-        const res = await fetch(`${API_BASE}/portfolios/${portfolioId}/violations?resolved=true`, {
+        const res = await fetch(apiUrl(`/portfolios/${portfolioId}/violations?resolved=true`), {
           headers: getHeaders(instId)
         });
         if (res.ok) {
@@ -333,7 +332,7 @@ export const useStore = create<GripperState>((set, get) => {
 
     fetchDocuments: async (instId) => {
       try {
-        const res = await fetch(`${API_BASE}/documents`, {
+        const res = await fetch(apiUrl('/documents'), {
           headers: getHeaders(instId)
         });
         if (res.ok) {
@@ -348,7 +347,7 @@ export const useStore = create<GripperState>((set, get) => {
     evaluateCompliance: async (portfolioId, instId) => {
       set({ isLoading: true });
       try {
-        const res = await fetch(`${API_BASE}/portfolios/${portfolioId}/evaluate`, {
+        const res = await fetch(apiUrl(`/portfolios/${portfolioId}/evaluate`), {
           method: 'POST',
           headers: getHeaders(instId)
         });
@@ -366,7 +365,7 @@ export const useStore = create<GripperState>((set, get) => {
     simulateCompliance: async (portfolioId, instId, holdingsData) => {
       set({ isLoading: true });
       try {
-        const res = await fetch(`${API_BASE}/portfolios/${portfolioId}/simulate`, {
+        const res = await fetch(apiUrl(`/portfolios/${portfolioId}/simulate`), {
           method: 'POST',
           headers: getHeaders(instId),
           body: JSON.stringify(holdingsData.map(h => ({
@@ -390,7 +389,7 @@ export const useStore = create<GripperState>((set, get) => {
     saveHoldings: async (portfolioId, instId, holdingsData) => {
       set({ isLoading: true });
       try {
-        const res = await fetch(`${API_BASE}/portfolios/${portfolioId}/holdings`, {
+        const res = await fetch(apiUrl(`/portfolios/${portfolioId}/holdings`), {
           method: 'POST',
           headers: getHeaders(instId),
           body: JSON.stringify(holdingsData.map(h => ({

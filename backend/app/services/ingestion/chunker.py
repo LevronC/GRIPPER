@@ -1,5 +1,4 @@
 from typing import List, Dict, Any
-from transformers import AutoTokenizer
 
 _tokenizer = None
 
@@ -7,9 +6,11 @@ def get_tokenizer():
     global _tokenizer
     if _tokenizer is None:
         try:
+            from transformers import AutoTokenizer
+
             # Attempt to load the BGE tokenizer from HuggingFace
             _tokenizer = AutoTokenizer.from_pretrained("BAAI/bge-small-en-v1.5")
-        except Exception as e:
+        except Exception:
             # Fallback simple whitespace-based pseudo-tokenizer if offline / error
             class FallbackTokenizer:
                 def encode(self, text: str) -> List[str]:
