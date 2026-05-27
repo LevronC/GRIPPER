@@ -67,6 +67,26 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-ci.txt
+      - name: Debug imports
+        working-directory: backend
+        run: |
+          python - <<'PYEOF'
+          import sys, os
+          sys.path.insert(0, '.')
+          print("Python:", sys.version)
+          print("PYTHONPATH:", os.environ.get("PYTHONPATH"))
+          print("SECRET_KEY set:", bool(os.environ.get("SECRET_KEY")))
+          try:
+              from app.models import Base
+              print("app.models: OK")
+          except Exception as e:
+              print("app.models FAILED:", e)
+          try:
+              from app.core.config import settings
+              print("app.core.config: OK, SECRET_KEY len:", len(settings.SECRET_KEY))
+          except Exception as e:
+              print("app.core.config FAILED:", e)
+          PYEOF
       - name: Prepare database
         working-directory: backend
         run: |
@@ -77,23 +97,8 @@ jobs:
           engine = create_engine(url)
           with engine.begin() as conn:
               conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-          print("Extension created OK")
           PY
-          echo "Running alembic upgrade head..."
-          alembic upgrade head -v 2>&1 || (echo "ALEMBIC FAILED" && python -c "
-import sys, os
-sys.path.insert(0, '.')
-try:
-    from app.models import Base
-    print('models import OK')
-except Exception as e:
-    print(f'models import FAILED: {e}')
-try:
-    from app.core.config import settings
-    print('config import OK, SECRET_KEY set:', bool(settings.SECRET_KEY))
-except Exception as e:
-    print(f'config import FAILED: {e}')
-" && exit 1)
+          alembic upgrade head
       - name: Ruff lint
         working-directory: backend
         run: ruff check tests app/core/rbac.py app/api/deps.py app/db/migrate.py
