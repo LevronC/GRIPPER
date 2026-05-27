@@ -61,16 +61,23 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: backend/requirements-dev.txt
+          cache-dependency-path: backend/requirements-ci.txt
       - name: Install dependencies
         working-directory: backend
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements-dev.txt
+          pip install -r requirements-ci.txt
       - name: Prepare database
         working-directory: backend
         run: |
-          PGPASSWORD=postgres psql -h localhost -U postgres -d gripper_test -c "CREATE EXTENSION IF NOT EXISTS vector;"
+          python - <<'PY'
+          import os
+          from sqlalchemy import create_engine, text
+          url = os.environ["DATABASE_URL"]
+          engine = create_engine(url)
+          with engine.begin() as conn:
+              conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+          PY
           alembic upgrade head
       - name: Ruff lint
         working-directory: backend

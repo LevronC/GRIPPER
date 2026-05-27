@@ -203,8 +203,6 @@ export default function GripperDashboard() {
 
   // Update holdings draft when global holdings change
   useEffect(() => {
-    // The matrix is an editable draft; reset it when backend holdings change.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setHoldingsDraft(holdings);
   }, [holdings]);
 
