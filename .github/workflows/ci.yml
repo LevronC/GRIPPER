@@ -86,7 +86,14 @@ jobs:
           PY
       - name: Run migrations
         working-directory: backend
-        run: alembic upgrade head -v
+        run: |
+          if ! alembic upgrade head -v 2>&1 | tee /tmp/alembic_out.txt; then
+            echo "## Alembic migration failure" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            cat /tmp/alembic_out.txt >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
       - name: Ruff lint
         working-directory: backend
         run: ruff check tests app/core/rbac.py app/api/deps.py app/db/migrate.py
