@@ -177,7 +177,7 @@ export default function GripperDashboard() {
   const [simulationActive, setSimulationActive] = useState(false);
   const [simulationTriggered, setSimulationTriggered] = useState(false);
 
-  // Intelligence center local state. These are frontend-only simulations adapted from the reference app.
+  // Intelligence center local state (frontend-only demo widgets; not wired to backend yet).
   const [newsFeed, setNewsFeed] = useState<NewsItem[]>(initialNewsFeed);
   const [analyzingNewsId, setAnalyzingNewsId] = useState<string | null>(null);
   const [secQuestion, setSecQuestion] = useState('');

@@ -34,3 +34,5 @@ __pycache__/
 .env.local
 .env.*.local
 .vercel
+scraped/
+scripts/scrape_robinhood.py

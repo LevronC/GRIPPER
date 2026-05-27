@@ -134,12 +134,3 @@ Migrations run automatically on API cold start. Check `/api/health/db` for `"sch
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Licensed under [MIT](LICENSE).
-
-## Scrapling reference scrape
-
-```bash
-source .venv/bin/activate
-python scripts/scrape_robinhood.py
-```
-
-Output: `scraped/content.json` (layout reference only).
