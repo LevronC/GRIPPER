@@ -32,19 +32,32 @@ def upgrade() -> None:
 
     # ── pgvector HNSW index ───────────────────────────────────────────────────
     # Reduces semantic search from O(n) full-table-scan to O(log n) approximate
-    # nearest neighbor. m=16, ef_construction=64 are well-tuned defaults for
-    # datasets up to ~500K vectors.
-    #
-    # NOTE: This cannot run inside a transaction block (Alembic default).
-    # If you run this migration on a live production database with existing data,
-    # execute it manually with CONCURRENTLY to avoid table locks:
-    #   CREATE INDEX CONCURRENTLY idx_chunks_embedding_hnsw ON document_chunks
-    #   USING hnsw (embedding vector_cosine_ops) WITH (m=16, ef_construction=64);
+    # nearest neighbor. HNSW requires pgvector >= 0.5.0 (released Oct 2023).
+    # The DO block checks for the access method before creating the index so
+    # this migration is backward-compatible with older pgvector installations
+    # (CI, air-gapped envs, etc.).
     op.execute("""
-        CREATE INDEX IF NOT EXISTS idx_chunks_embedding_hnsw
-        ON document_chunks
-        USING hnsw (embedding vector_cosine_ops)
-        WITH (m = 16, ef_construction = 64);
+        DO $$
+        BEGIN
+            IF EXISTS (SELECT 1 FROM pg_am WHERE amname = 'hnsw') THEN
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_indexes
+                    WHERE tablename = 'document_chunks'
+                      AND indexname = 'idx_chunks_embedding_hnsw'
+                ) THEN
+                    EXECUTE '
+                        CREATE INDEX idx_chunks_embedding_hnsw
+                        ON document_chunks
+                        USING hnsw (embedding vector_cosine_ops)
+                        WITH (m = 16, ef_construction = 64)
+                    ';
+                END IF;
+            ELSE
+                RAISE NOTICE
+                    ''HNSW access method not available (pgvector < 0.5.0). ''
+                    ''Skipping vector index — upgrade pgvector to enable it.'';
+            END IF;
+        END $$;
     """)
 
     # ── Composite indexes for compliance query patterns ────────────────────────
@@ -90,5 +103,5 @@ def downgrade() -> None:
     op.drop_index("idx_research_reports_status", "research_reports")
     op.drop_index("idx_research_reports_institution_created", "research_reports")
     op.drop_index("idx_governance_events_portfolio_resolved", "governance_events")
-    op.execute("DROP INDEX IF EXISTS idx_chunks_embedding_hnsw;")
+    op.execute("DROP INDEX IF EXISTS idx_chunks_embedding_hnsw;")  # noqa: no-op if never created
     op.drop_column("research_reports", "file_path")

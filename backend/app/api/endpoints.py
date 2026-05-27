@@ -133,9 +133,12 @@ def upload_document(
     db.add(report)
     db.commit()
 
-    # Enqueue background processing (RQ → Redis Queue)
-    # On Vercel: CRON picks this up via GET /cron/process-documents (runs every minute).
-    # On Railway/local: The rq worker process consumes the job immediately.
+    # ── Background processing ─────────────────────────────────────────────────
+    # Priority order:
+    #   1. RQ via Redis — async, instant (local dev / VM)
+    #   2. Synchronous in-request — when Redis is unavailable and we're on
+    #      Vercel (no persistent worker process). Fits within the 60s timeout
+    #      for typical research reports (10-50 pages + HF API embedding).
     task_queue = get_task_queue()
     if task_queue:
         try:
@@ -146,18 +149,32 @@ def upload_document(
                 file_ref,
                 str(institution_id),
             )
+            return {
+                "report_id": str(report_id),
+                "status": "pending",
+                "message": "Document enqueued for async ingestion.",
+            }
         except Exception as e:
-            logger.warning("Could not enqueue ingestion job (cron will pick it up): %s", e)
-    else:
-        logger.info(
-            "No Redis queue available — report %s will be processed by cron.", report_id
-        )
+            logger.warning("Could not enqueue ingestion job, falling back to sync: %s", e)
 
-    return {
-        "report_id": str(report_id),
-        "status": "pending",
-        "message": "Document enqueued for ingestion.",
-    }
+    # Synchronous fallback — run ingestion inside this request
+    from app.services.ingestion.pipeline import ingest_document as _ingest
+    logger.info("Processing document %s synchronously (no Redis queue)", report_id)
+    try:
+        chunks = _ingest(db, report_id, file_ref, institution_id)
+        return {
+            "report_id": str(report_id),
+            "status": "processed",
+            "chunks": chunks,
+            "message": "Document ingested.",
+        }
+    except Exception as e:
+        logger.error("Synchronous ingestion failed for report %s: %s", report_id, e)
+        return {
+            "report_id": str(report_id),
+            "status": "failed",
+            "message": f"Ingestion failed: {e}",
+        }
 
 
 # ── Document listing ───────────────────────────────────────────────────────────
