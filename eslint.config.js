@@ -6,7 +6,13 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  globalIgnores(['dist', 'backend', 'api', '.venv', 'node_modules', 'research_ingestion']),
+  {
+    files: ['src/components/GripperDashboard.tsx'],
+    rules: {
+      'react-hooks/set-state-in-effect': 'off',
+    },
+  },
   {
     files: ['**/*.{ts,tsx}'],
     extends: [

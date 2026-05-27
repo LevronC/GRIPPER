@@ -45,6 +45,9 @@ def run_migrations() -> None:
 def ensure_database_ready() -> None:
     """Run migrations and seed once per process (Vercel cold start)."""
     global _database_ready
+    if os.getenv("SKIP_DB_BOOTSTRAP", "").lower() in ("1", "true", "yes"):
+        _database_ready = True
+        return
     if _database_ready:
         return
 

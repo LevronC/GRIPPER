@@ -14,7 +14,8 @@ from app import models
 from app.schemas.document import SemanticSearchRequest
 from app.services.retrieval.searcher import search_documents
 from app.workers.tasks import process_document_ingestion
-from app.api.deps import get_current_user, RoleChecker
+from app.api.deps import RoleChecker
+from app.core.rbac import COMPLIANCE_ROLES, READ_ROLES, RESEARCH_ROLES, SIMULATION_ROLES
 
 router = APIRouter()
 
@@ -51,7 +52,7 @@ def upload_document(
     recommendation: str = Form(...),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user = Depends(RoleChecker(["analyst", "sector_lead", "pm", "admin"]))
+    current_user=Depends(RoleChecker(RESEARCH_ROLES)),
 ):
     """
     Accepts PDF uploads, validates file size and signature, writes to storage,
@@ -158,7 +159,7 @@ def upload_document(
 @router.get("/documents")
 def list_documents(
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user=Depends(RoleChecker(READ_ROLES)),
 ):
     """
     Returns list of research reports for the current institution context.
@@ -186,7 +187,7 @@ def list_documents(
 def semantic_search(
     request: SemanticSearchRequest,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user=Depends(RoleChecker(READ_ROLES)),
 ):
     """
     RAG semantic search endpoint. Takes a query string and returns relevant chunks.
@@ -223,7 +224,7 @@ from pydantic import BaseModel
 def evaluate_portfolio(
     portfolio_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user=Depends(RoleChecker(COMPLIANCE_ROLES)),
 ):
     """
     Runs deterministic compliance checks for a portfolio against active IPS rules.
@@ -251,7 +252,7 @@ def get_portfolio_violations(
     portfolio_id: uuid.UUID,
     resolved: bool = False,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user=Depends(RoleChecker(READ_ROLES)),
 ):
     """
     Returns the list of active or resolved compliance breach events for a portfolio.
@@ -294,7 +295,7 @@ def get_portfolio_violations(
 def explain_violation(
     event_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user=Depends(RoleChecker(COMPLIANCE_ROLES)),
 ):
     """
     Retrieves the qualitative investment context (RAG document chunks)
@@ -329,7 +330,7 @@ def simulate_portfolio(
     portfolio_id: uuid.UUID,
     holdings_data: List[HoldingSimulation],
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user=Depends(RoleChecker(SIMULATION_ROLES)),
 ):
     """
     Runs hypothetical compliance checks for a portfolio against active IPS rules

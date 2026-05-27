@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  frontend:
+    name: Frontend build & lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+
+  backend:
+    name: Backend tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: gripper_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d gripper_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/gripper_test
+      SUPERUSER_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/gripper_test
+      REDIS_URL: redis://localhost:6379/0
+      SECRET_KEY: ci-test-secret-key
+      SKIP_DB_BOOTSTRAP: "1"
+      SEED_DEMO_USER: "false"
+      ALLOW_HEADER_AUTH: "true"
+      PYTHONPATH: .
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+      - name: Install dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+      - name: Prepare database
+        working-directory: backend
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -d gripper_test -c "CREATE EXTENSION IF NOT EXISTS vector;"
+          alembic upgrade head
+      - name: Ruff lint
+        working-directory: backend
+        run: ruff check tests app/core/rbac.py app/api/deps.py app/db/migrate.py
+      - name: Pytest
+        working-directory: backend
+        run: pytest tests/ -v --cov=app --cov-report=term-missing

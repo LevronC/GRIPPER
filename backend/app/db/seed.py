@@ -96,6 +96,10 @@ def seed_default_data() -> None:
                         )
                     )
 
+                if not settings.SEED_DEMO_USER:
+                    db.commit()
+                    return
+
                 demo_user = (
                     db.query(models.User)
                     .filter(models.User.email == DEMO_USER["email"])

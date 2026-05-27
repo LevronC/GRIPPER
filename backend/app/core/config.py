@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     SECRET_KEY: str = os.getenv("SECRET_KEY", "gripper_super_secret_signing_key_2026")
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
+    SEED_DEMO_USER: bool = os.getenv("SEED_DEMO_USER", "true").lower() in ("1", "true", "yes")
+    ALLOW_HEADER_AUTH: bool = os.getenv("ALLOW_HEADER_AUTH", "").lower() in ("1", "true", "yes")
 
     class Config:
         env_file = ".env"

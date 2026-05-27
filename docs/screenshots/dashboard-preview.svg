@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675" role="img" aria-label="Gripper Risk Terminal preview">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e0037"/>
+      <stop offset="100%" stop-color="#0d001a"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="675" fill="url(#bg)"/>
+  <rect x="40" y="40" width="1120" height="595" rx="12" fill="#120022" stroke="#7c3aed" stroke-opacity="0.35"/>
+  <text x="72" y="92" fill="#c4b5fd" font-family="system-ui,sans-serif" font-size="22" font-weight="600">Gripper Risk Terminal</text>
+  <text x="72" y="122" fill="#a78bfa" font-family="system-ui,sans-serif" font-size="14">IPS compliance · RAG research · Multi-tenant RLS</text>
+  <rect x="72" y="160" width="260" height="420" rx="8" fill="#1a0033" stroke="#6d28d9" stroke-opacity="0.4"/>
+  <rect x="360" y="160" width="760" height="180" rx="8" fill="#1a0033" stroke="#6d28d9" stroke-opacity="0.4"/>
+  <rect x="360" y="360" width="760" height="220" rx="8" fill="#1a0033" stroke="#6d28d9" stroke-opacity="0.4"/>
+  <text x="92" y="200" fill="#e9d5ff" font-family="system-ui,sans-serif" font-size="13">Portfolios</text>
+  <text x="92" y="240" fill="#ddd6fe" font-family="system-ui,sans-serif" font-size="12">Stetson George Value Fund</text>
+  <text x="92" y="270" fill="#a78bfa" font-family="system-ui,sans-serif" font-size="11">Compliance: 2 active violations</text>
+  <text x="380" y="200" fill="#e9d5ff" font-family="system-ui,sans-serif" font-size="13">Governance dashboard</text>
+  <text x="380" y="240" fill="#fca5a5" font-family="system-ui,sans-serif" font-size="12">TSLA  single position cap exceeded</text>
+  <text x="380" y="400" fill="#e9d5ff" font-family="system-ui,sans-serif" font-size="13">Semantic research search</text>
+  <text x="380" y="440" fill="#ddd6fe" font-family="system-ui,sans-serif" font-size="12">Query: "Tesla FSD conviction thesis"</text>
+</svg>

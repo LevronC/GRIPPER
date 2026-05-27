@@ -16,6 +16,13 @@ from sqlalchemy.orm import Session
 
 from app.api.auth import router as auth_router, get_superuser_session
 from app.api.deps import get_current_user, RoleChecker
+from app.core.rbac import (
+    ADMIN_ROLES,
+    COMPLIANCE_ROLES,
+    HOLDINGS_WRITE_ROLES,
+    PORTFOLIO_WRITE_ROLES,
+    READ_ROLES,
+)
 from app.core.config import settings
 from app.core.database_url import database_url_error_hint
 
@@ -112,7 +119,12 @@ def health_db_check():
         ) from exc
 
 @app.post("/institutions")
-def create_institution(name: str, slug: str, db: Session = Depends(get_db)):
+def create_institution(
+    name: str,
+    slug: str,
+    db: Session = Depends(get_db),
+    current_user=Depends(RoleChecker(ADMIN_ROLES)),
+):
     # Creating an institution doesn't require tenant context.
     # We bypass RLS by not setting the X-Institution-ID header.
     inst = models.Institution(name=name, slug=slug)
@@ -128,7 +140,12 @@ def create_institution(name: str, slug: str, db: Session = Depends(get_db)):
     }
 
 @app.post("/portfolios")
-def create_portfolio(name: str, strategy_type: str, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+def create_portfolio(
+    name: str,
+    strategy_type: str,
+    db: Session = Depends(get_db),
+    current_user=Depends(RoleChecker(PORTFOLIO_WRITE_ROLES)),
+):
     # Retrieve current institution from connection context (configured via dependency)
     res = db.execute(text("SHOW app.current_institution_id")).scalar()
     if not res or res == "":
@@ -150,7 +167,10 @@ def create_portfolio(name: str, strategy_type: str, db: Session = Depends(get_db
     }
 
 @app.get("/portfolios")
-def list_portfolios(db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+def list_portfolios(
+    db: Session = Depends(get_db),
+    current_user=Depends(RoleChecker(READ_ROLES)),
+):
     res = db.execute(text("SHOW app.current_institution_id")).scalar()
     if not res or res == "":
          raise HTTPException(status_code=400, detail="X-Institution-ID header or token is required to retrieve portfolios")
@@ -232,7 +252,11 @@ def list_institutions(
     ]
 
 @app.get("/portfolios/{portfolio_id}/holdings")
-def list_portfolio_holdings(portfolio_id: uuid.UUID, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+def list_portfolio_holdings(
+    portfolio_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user=Depends(RoleChecker(READ_ROLES)),
+):
     res = db.execute(text("SHOW app.current_institution_id")).scalar()
     if not res or res == "":
         raise HTTPException(status_code=400, detail="X-Institution-ID header or token is required")
@@ -262,7 +286,7 @@ def update_portfolio_holdings(
     portfolio_id: uuid.UUID, 
     holdings_data: List[HoldingUpdate], 
     db: Session = Depends(get_db),
-    current_user = Depends(RoleChecker(["pm", "sector_lead", "admin"]))
+    current_user=Depends(RoleChecker(HOLDINGS_WRITE_ROLES)),
 ):
     res = db.execute(text("SHOW app.current_institution_id")).scalar()
     if not res or res == "":
@@ -286,7 +310,10 @@ def update_portfolio_holdings(
     return {"status": "success", "count": len(new_holdings)}
 
 @app.get("/ips_rules")
-def list_ips_rules(db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+def list_ips_rules(
+    db: Session = Depends(get_db),
+    current_user=Depends(RoleChecker(READ_ROLES)),
+):
     res = db.execute(text("SHOW app.current_institution_id")).scalar()
     if not res or res == "":
         raise HTTPException(status_code=400, detail="X-Institution-ID header or token is required")

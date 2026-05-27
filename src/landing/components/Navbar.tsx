@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { navLinks } from '../data/content'
 import { BrandLogo } from '../../components/ui/BrandLogo'
 import { routes, terminalPath } from '../../lib/routes'
@@ -7,7 +7,6 @@ import { routes, terminalPath } from '../../lib/routes'
 export function Navbar() {
   const [scrolled, setScrolled] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
-  const location = useLocation()
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 12)
@@ -16,9 +15,7 @@ export function Navbar() {
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
-  useEffect(() => {
-    setMenuOpen(false)
-  }, [location.pathname])
+  const closeMenu = () => setMenuOpen(false)
 
   return (
     <header
@@ -81,18 +78,18 @@ export function Navbar() {
         <div className="border-t border-white/5 bg-canvas/95 px-6 py-6 backdrop-blur-xl lg:hidden">
           <nav className="flex flex-col gap-4" aria-label="Mobile">
             {navLinks.map((link) => (
-              <a key={link.label} href={link.href} className="text-base text-ink">
+              <a key={link.label} href={link.href} className="text-base text-ink" onClick={closeMenu}>
                 {link.label}
               </a>
             ))}
-            <Link to={routes.docs} className="text-base text-ink">
+            <Link to={routes.docs} className="text-base text-ink" onClick={closeMenu}>
               Docs
             </Link>
             <div className="mt-4 flex flex-col gap-3 border-t border-white/10 pt-4">
-              <Link to={terminalPath('login')} className="text-ink-muted">
+              <Link to={terminalPath('login')} className="text-ink-muted" onClick={closeMenu}>
                 Log in
               </Link>
-              <Link to={terminalPath('register')} className="pill-btn bg-accent text-accent-ink">
+              <Link to={terminalPath('register')} className="pill-btn bg-accent text-accent-ink" onClick={closeMenu}>
                 Open terminal
               </Link>
             </div>

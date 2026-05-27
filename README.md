@@ -2,6 +2,12 @@
 
 Multi-tenant investment compliance and semantic intelligence platform for student equity programs (e.g. RGIP) and institutional research teams.
 
+[![CI](https://github.com/LevronC/GRIPPER/actions/workflows/ci.yml/badge.svg)](https://github.com/LevronC/GRIPPER/actions/workflows/ci.yml)
+
+**Live demo:** [gripper-ten.vercel.app/app](https://gripper-ten.vercel.app/app) · Demo credentials in [docs/DEMO.md](docs/DEMO.md)
+
+![Gripper Risk Terminal preview](docs/screenshots/dashboard-preview.svg)
+
 ## Application routes
 
 | Route | Purpose |
@@ -33,7 +39,7 @@ cp .env.example .env
 ```bash
 cd backend
 python3 -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 alembic upgrade head
 export PYTHONPATH=.
 uvicorn app.main:app --port 8000 --reload
@@ -56,13 +62,9 @@ npm run dev
 
 Open [http://localhost:5173](http://localhost:5173). Vite proxies `/api` → `http://localhost:8000`.
 
-### 5. Seed an institution (first run)
+### 5. Register and log in
 
-```bash
-curl -X POST "http://localhost:8000/institutions?name=Stetson%20RGIP&slug=stetson-rgip"
-```
-
-### 6. Register and log in
+Default institutions (Stetson, UF, RGIP Demo) are seeded on API startup. To try immediately, see [docs/DEMO.md](docs/DEMO.md).
 
 1. Visit `/app?mode=register`
 2. Use a `.edu` email, select your institution, and choose a role
@@ -81,15 +83,11 @@ The selected institution at login must match the institution on your account.
 ## Project structure
 
 ```
-├── src/
-│   ├── landing/          # Marketing site components
-│   ├── pages/            # LandingPage, DocsPage
-│   ├── components/       # GripperDashboard terminal
-│   ├── store/            # Zustand auth + data state
-│   └── lib/              # API helpers and route constants
+├── src/                  # React landing + terminal UI
 ├── backend/              # FastAPI, SQLAlchemy, Alembic, workers
 ├── api/                  # Vercel serverless entry (mounts backend at /api)
-└── scraped/              # Optional Scrapling output (Robinhood reference scrape)
+├── docs/                 # DEMO, RBAC, internal planning notes
+└── .github/workflows/    # CI (lint, build, pytest)
 ```
 
 ## Key features
@@ -97,12 +95,18 @@ The selected institution at login must match the institution on your account.
 - **IPS governance** — position caps, sector limits, liquidity rules
 - **RAG research search** — pgvector semantic search over uploaded PDFs
 - **Multi-tenant RLS** — PostgreSQL row-level security per institution
+- **Role-based access control** — see [docs/RBAC.md](docs/RBAC.md)
 - **Async ingestion** — Redis Queue workers for PDF parsing and embedding
 - **Explainability** — violations with citations from analyst research
 
 ## Tests
 
 ```bash
+# Automated suite (CI)
+cd backend && pip install -r requirements-dev.txt
+pytest tests/ -v
+
+# Legacy integration scripts (require local Postgres + Redis)
 cd backend && export PYTHONPATH=. && python test_governance.py
 cd backend && export PYTHONPATH=. && python test_rag.py
 ```
@@ -122,24 +126,20 @@ Set production environment variables in Vercel:
 | `REDIS_URL` | Yes | Token blacklist + RQ (must start with `redis://` or `rediss://`) |
 | `SECRET_KEY` | Yes | JWT signing key |
 | `SUPERUSER_DATABASE_URL` | Recommended | Same encoded Supabase pooler URL as `DATABASE_URL` |
+| `SEED_DEMO_USER` | No | Set `false` in production to skip shared demo password seed |
 | `VITE_API_BASE_URL` | No | Defaults to `/api` on Vercel |
 
-### Demo login (seeded on startup)
+Migrations run automatically on API cold start. Check `/api/health/db` for `"schema_ready": true`.
 
-After the database is connected, the API seeds default institutions and a demo account:
+## Contributing
 
-- **Stetson University** — `analyst@stetson.edu` / `Gripp3rDemo!`
-- Also available: University of Florida, RGIP Demo Program
-
-Run migrations against production Postgres before first deploy: `cd backend && alembic upgrade head`
-
-On Vercel, migrations also run automatically on API cold start (creates `users`, `institutions`, etc., then seeds demo data).
+See [CONTRIBUTING.md](CONTRIBUTING.md). Licensed under [MIT](LICENSE).
 
 ## Scrapling reference scrape
 
 ```bash
-source .venv/bin/activate   # from repo root if using scripts/scrape_robinhood.py
+source .venv/bin/activate
 python scripts/scrape_robinhood.py
 ```
 
-Output: `scraped/content.json` (layout reference only; landing copy reflects GRIPPER product).
+Output: `scraped/content.json` (layout reference only).
