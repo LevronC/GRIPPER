@@ -67,27 +67,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-ci.txt
-      - name: Debug imports
-        working-directory: backend
-        run: |
-          python - <<'PYEOF'
-          import sys, os
-          sys.path.insert(0, '.')
-          print("Python:", sys.version)
-          print("PYTHONPATH:", os.environ.get("PYTHONPATH"))
-          print("SECRET_KEY set:", bool(os.environ.get("SECRET_KEY")))
-          try:
-              from app.models import Base
-              print("app.models: OK")
-          except Exception as e:
-              print("app.models FAILED:", e)
-          try:
-              from app.core.config import settings
-              print("app.core.config: OK, SECRET_KEY len:", len(settings.SECRET_KEY))
-          except Exception as e:
-              print("app.core.config FAILED:", e)
-          PYEOF
-      - name: Prepare database
+      - name: Create pgvector extension
         working-directory: backend
         run: |
           python - <<'PY'
@@ -96,9 +76,17 @@ jobs:
           url = os.environ["DATABASE_URL"]
           engine = create_engine(url)
           with engine.begin() as conn:
-              conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+              result = conn.execute(text("SELECT extversion FROM pg_extension WHERE extname='vector'"))
+              row = result.fetchone()
+              if row:
+                  print("vector already installed, version:", row[0])
+              else:
+                  conn.execute(text("CREATE EXTENSION vector"))
+                  print("vector extension: created")
           PY
-          alembic upgrade head
+      - name: Run migrations
+        working-directory: backend
+        run: alembic upgrade head -v
       - name: Ruff lint
         working-directory: backend
         run: ruff check tests app/core/rbac.py app/api/deps.py app/db/migrate.py
