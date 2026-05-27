@@ -1,13 +1,12 @@
 import os
-from typing import Optional
+from typing import Optional, List
 
 from fastapi import Depends, HTTPException, status, Header
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import jwt, JWTError
-from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy import text, create_engine
+from sqlalchemy.orm import Session
+from sqlalchemy import text
 import uuid
-from typing import List
 
 from app.core.config import settings
 from app.core import security
@@ -56,10 +55,13 @@ def get_current_user(
                 detail="Could not validate credentials: JWT invalid or expired",
             )
 
-        super_engine = create_engine(settings.SUPERUSER_DATABASE_URL, pool_pre_ping=True)
-        SuperSession = sessionmaker(bind=super_engine)
-        with SuperSession() as super_db:
-            user = super_db.query(models.User).filter(models.User.id == uuid.UUID(user_id)).first()
+        # Reuse the module-level cached superuser engine from auth.py — never
+        # call create_engine() inside a request handler (pool exhaustion).
+        from app.api.auth import get_superuser_session
+        with get_superuser_session() as super_db:
+            user = super_db.query(models.User).filter(
+                models.User.id == uuid.UUID(user_id)
+            ).first()
 
         if not user:
             raise HTTPException(
@@ -67,7 +69,10 @@ def get_current_user(
                 detail="User not found",
             )
 
-        db.execute(text("SET LOCAL app.current_institution_id = :inst_id"), {"inst_id": str(user.institution_id)})
+        db.execute(
+            text("SET LOCAL app.current_institution_id = :inst_id"),
+            {"inst_id": str(user.institution_id)},
+        )
         return user
 
     if x_institution_id:
@@ -83,7 +88,10 @@ def get_current_user(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid X-Institution-ID UUID format",
             )
-        db.execute(text("SET LOCAL app.current_institution_id = :inst_id"), {"inst_id": x_institution_id})
+        db.execute(
+            text("SET LOCAL app.current_institution_id = :inst_id"),
+            {"inst_id": x_institution_id},
+        )
         return None
 
     return None
@@ -103,6 +111,9 @@ class RoleChecker:
         if current_user.role not in self.allowed_roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Operation not permitted. Required roles: {self.allowed_roles}. Current role: {current_user.role}",
+                detail=(
+                    f"Operation not permitted. Required roles: {self.allowed_roles}. "
+                    f"Current role: {current_user.role}"
+                ),
             )
         return current_user

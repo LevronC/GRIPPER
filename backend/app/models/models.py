@@ -80,11 +80,15 @@ class ResearchReport(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     institution_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("institutions.id", ondelete="CASCADE"), nullable=False)
     uploaded_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
-    sector: Mapped[str] = mapped_column(String(100), nullable=False) # e.g. Technology, Healthcare
-    company: Mapped[str] = mapped_column(String(255), nullable=False) # Company Name / Ticker
-    recommendation: Mapped[str] = mapped_column(String(50), nullable=False) # buy, hold, sell
-    status: Mapped[str] = mapped_column(String(50), default="draft") # draft, pending_review, approved, rejected
-    file_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True) # SHA-256 hash
+    sector: Mapped[str] = mapped_column(String(100), nullable=False)
+    company: Mapped[str] = mapped_column(String(255), nullable=False)
+    recommendation: Mapped[str] = mapped_column(String(50), nullable=False)  # buy, hold, sell
+    status: Mapped[str] = mapped_column(String(50), default="draft")  # pending, processed, failed
+    file_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)  # SHA-256
+    # Stable reference to the uploaded file. On Vercel this is a Blob URL
+    # (https://...). In local dev it is an absolute filesystem path.
+    # Set to NULL when the file has been deleted after successful ingestion.
+    file_path: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=text("TIMEZONE('utc', NOW())"))
 
     # Relationships

@@ -5,6 +5,8 @@ from typing import Optional
 from redis import Redis
 
 from app.core.config import normalize_redis_url
+
+_redis_client: Optional[Redis] = None
 _redis_checked = False
 
 

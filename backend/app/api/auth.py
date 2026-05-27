@@ -20,8 +20,16 @@ from app import models
 from app.core import security
 from app.core.config import settings
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/auth", tags=["auth"])
 reusable_oauth2 = HTTPBearer(auto_error=False)
+
+# Roles a user may select at self-registration.
+# Privileged roles (pm, trustee, admin) must be assigned by an existing admin
+# via PATCH /users/{user_id}/role — they cannot be self-claimed.
+SELF_REGISTRATION_ROLES = ["analyst", "sector_lead", "faculty"]
+ALL_ROLES = ["analyst", "sector_lead", "pm", "faculty", "trustee", "admin"]
 
 _super_engine = None
 _super_session_factory = None
@@ -73,11 +81,13 @@ def register_user(user_in: UserRegister):
             detail=f"Database setup failed: {exc}",
         ) from exc
 
-    valid_roles = ["analyst", "sector_lead", "pm", "faculty", "trustee", "admin"]
-    if user_in.role not in valid_roles:
+    if user_in.role not in SELF_REGISTRATION_ROLES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid user role. Must be one of: {', '.join(valid_roles)}",
+            detail=(
+                f"Self-registration is limited to: {', '.join(SELF_REGISTRATION_ROLES)}. "
+                "Contact your institution administrator to be assigned a privileged role."
+            ),
         )
 
     hashed_pwd = security.get_password_hash(user_in.password)
@@ -138,7 +148,13 @@ def register_user(user_in: UserRegister):
             detail=f"Registration failed: {exc}",
         ) from exc
 
-    print(f"DEBUG: Verification code for {db_user.email} is: {v_code}")
+    if settings.DEBUG_PRINT_CODES:
+        logger.warning(
+            "DEBUG_PRINT_CODES enabled — verification code for %s: %s — DISABLE IN PRODUCTION",
+            db_user.email, v_code,
+        )
+    else:
+        logger.info("Verification code issued for %s (code suppressed)", db_user.email)
 
     return {
         "id": str(db_user.id),
@@ -168,7 +184,7 @@ def login_user(credentials: UserLogin):
 
     if not security.verify_password(credentials.password, db_user.hashed_password):
         raise HTTPException(
-            status_code=status.HTTP_418_IM_A_TEAPOT if credentials.password == "test_pot" else status.HTTP_401_UNAUTHORIZED,
+            status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password.",
             headers={"WWW-Authenticate": "Bearer"},
         )
@@ -245,27 +261,26 @@ class ResetPasswordRequest(BaseModel):
 
 @router.post("/forgot-password")
 def forgot_password(payload: ForgotPasswordRequest):
+    reset_code = None
     with get_superuser_session() as super_db:
         user = super_db.query(models.User).filter(models.User.email == payload.email).first()
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="No account found for that email.",
-            )
-        if not user.is_verified:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Account not verified. Complete email verification before resetting your password.",
-            )
+        # Do not reveal whether the email exists — always return the same response.
+        if user and user.is_verified:
+            reset_code = "".join(random.choices(string.digits, k=6))
+            user.verification_code = reset_code
+            super_db.commit()
 
-        reset_code = "".join(random.choices(string.digits, k=6))
-        user.verification_code = reset_code
-        super_db.commit()
-
-    print(f"DEBUG: Password reset code for {payload.email} is: {reset_code}")
+    if reset_code:
+        if settings.DEBUG_PRINT_CODES:
+            logger.warning(
+                "DEBUG_PRINT_CODES enabled — reset code for %s: %s — DISABLE IN PRODUCTION",
+                payload.email, reset_code,
+            )
+        else:
+            logger.info("Password reset code issued for %s (code suppressed)", payload.email)
 
     return {
-        "message": "If an account exists for that email, a reset code has been sent. In development, check the backend console.",
+        "message": "If an account exists for that email, a reset code has been sent.",
     }
 
 @router.post("/reset-password", response_model=Token)

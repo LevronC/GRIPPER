@@ -1,16 +1,17 @@
-import os
 import logging
+import os
 import uuid
 from contextlib import asynccontextmanager
 from typing import List, Optional
 
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
+from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import jwt, JWTError
 from pydantic import BaseModel
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
@@ -18,6 +19,7 @@ from app.api.auth import router as auth_router, get_superuser_session
 from app.api.deps import get_current_user, RoleChecker
 from app.core.rbac import (
     ADMIN_ROLES,
+    ALL_ROLES as _ALL_ROLES,
     COMPLIANCE_ROLES,
     HOLDINGS_WRITE_ROLES,
     PORTFOLIO_WRITE_ROLES,
@@ -25,19 +27,20 @@ from app.core.rbac import (
 )
 from app.core.config import settings
 from app.core.database_url import database_url_error_hint
+from app import models
+from app.api.endpoints import router as api_router
+from app.db.migrate import ensure_database_ready
+from app.db.seed import DEFAULT_INSTITUTIONS
+from app.db.session import get_db, engine
 
-from . import models
-from .api.endpoints import router as api_router
-from .db.migrate import ensure_database_ready
-from .db.seed import DEFAULT_INSTITUTIONS
-from .db.session import get_db, _engine_kwargs
+logger = logging.getLogger(__name__)
 
 SWAGGER_OPENAPI_URL = os.getenv("SWAGGER_OPENAPI_URL", "/openapi.json")
 public_bearer = HTTPBearer(auto_error=False)
 
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    logger = logging.getLogger(__name__)
     try:
         ensure_database_ready()
     except Exception as exc:
@@ -68,9 +71,29 @@ async def redoc_html():
         title=f"{app.title} - ReDoc",
     )
 
+
+# ── Security response headers ─────────────────────────────────────────────────
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next) -> Response:
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    # Tight CSP — API-only service, no HTML pages served from this origin
+    response.headers["Content-Security-Policy"] = "default-src 'none'"
+    return response
+
+
+# ── CORS ──────────────────────────────────────────────────────────────────────
+# On Vercel, the frontend is served at the same origin as the API, so
+# cross-origin requests only happen in local development.
+# Set ALLOWED_ORIGINS to a comma-separated list of trusted origins, e.g.:
+#   http://localhost:5173,https://gripper.vercel.app
+_origins = [o.strip() for o in settings.ALLOWED_ORIGINS.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -79,13 +102,15 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(api_router)
 
+
 @app.get("/")
 def root():
     return {
         "message": "Gripper Risk Terminal API is running",
         "docs": "/docs",
-        "health": "/health"
+        "health": "/health",
     }
+
 
 @app.get("/health")
 def health_check():
@@ -94,9 +119,8 @@ def health_check():
 
 @app.get("/health/db")
 def health_db_check():
+    """Lightweight DB connectivity check — reuses the existing engine pool."""
     try:
-        db_url = settings.SUPERUSER_DATABASE_URL or settings.DATABASE_URL
-        engine = create_engine(db_url, **_engine_kwargs(db_url))
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
             users_exists = conn.execute(
@@ -118,6 +142,9 @@ def health_db_check():
             detail=database_url_error_hint(settings.DATABASE_URL, exc),
         ) from exc
 
+
+# ── Institutions ──────────────────────────────────────────────────────────────
+
 @app.post("/institutions")
 def create_institution(
     name: str,
@@ -125,8 +152,6 @@ def create_institution(
     db: Session = Depends(get_db),
     current_user=Depends(RoleChecker(ADMIN_ROLES)),
 ):
-    # Creating an institution doesn't require tenant context.
-    # We bypass RLS by not setting the X-Institution-ID header.
     inst = models.Institution(name=name, slug=slug)
     db.add(inst)
     db.commit()
@@ -136,66 +161,18 @@ def create_institution(
         "name": inst.name,
         "slug": inst.slug,
         "tier": inst.tier,
-        "created_at": inst.created_at
+        "created_at": inst.created_at,
     }
 
-@app.post("/portfolios")
-def create_portfolio(
-    name: str,
-    strategy_type: str,
-    db: Session = Depends(get_db),
-    current_user=Depends(RoleChecker(PORTFOLIO_WRITE_ROLES)),
-):
-    # Retrieve current institution from connection context (configured via dependency)
-    res = db.execute(text("SHOW app.current_institution_id")).scalar()
-    if not res or res == "":
-        raise HTTPException(status_code=400, detail="X-Institution-ID header or token is required to create a portfolio")
-    
-    portfolio = models.Portfolio(
-        institution_id=uuid.UUID(res),
-        name=name,
-        strategy_type=strategy_type
-    )
-    db.add(portfolio)
-    db.commit()
-    db.refresh(portfolio)
-    return {
-        "id": str(portfolio.id),
-        "name": portfolio.name,
-        "strategy_type": portfolio.strategy_type,
-        "institution_id": str(portfolio.institution_id)
-    }
-
-@app.get("/portfolios")
-def list_portfolios(
-    db: Session = Depends(get_db),
-    current_user=Depends(RoleChecker(READ_ROLES)),
-):
-    res = db.execute(text("SHOW app.current_institution_id")).scalar()
-    if not res or res == "":
-         raise HTTPException(status_code=400, detail="X-Institution-ID header or token is required to retrieve portfolios")
-    
-    # Due to Row-Level Security (RLS) configured in database,
-    # this query will automatically be filtered by the database engine.
-    portfolios = db.query(models.Portfolio).all()
-    return [
-        {
-            "id": str(p.id),
-            "name": p.name,
-            "strategy_type": p.strategy_type,
-            "institution_id": str(p.institution_id)
-        }
-        for p in portfolios
-    ]
 
 @app.get("/institutions")
 def list_institutions(
     token_creds: Optional[HTTPAuthorizationCredentials] = Depends(public_bearer),
 ):
     """
-    Returns list of institutions.
-    - If unauthenticated (sign-in/sign-up): returns all available tenants.
-    - If authenticated: returns ONLY the user's bound institution for security.
+    Returns the list of institutions.
+    Authenticated requests receive only their own institution.
+    Unauthenticated requests receive all institutions (needed for the sign-in form).
     """
     institution_filter_id = None
     if token_creds:
@@ -208,7 +185,9 @@ def list_institutions(
             user_id = payload.get("sub")
             if user_id:
                 with get_superuser_session() as db:
-                    user = db.query(models.User).filter(models.User.id == uuid.UUID(user_id)).first()
+                    user = db.query(models.User).filter(
+                        models.User.id == uuid.UUID(user_id)
+                    ).first()
                     if user:
                         institution_filter_id = user.institution_id
         except (JWTError, ValueError):
@@ -242,14 +221,64 @@ def list_institutions(
         fallback = [item for item in fallback if item["id"] == institution_filter_id]
 
     return [
-        {
-            "id": str(item["id"]),
-            "name": item["name"],
-            "slug": item["slug"],
-            "tier": item["tier"],
-        }
+        {"id": str(item["id"]), "name": item["name"], "slug": item["slug"], "tier": item["tier"]}
         for item in fallback
     ]
+
+
+# ── Portfolios ────────────────────────────────────────────────────────────────
+
+@app.post("/portfolios")
+def create_portfolio(
+    name: str,
+    strategy_type: str,
+    db: Session = Depends(get_db),
+    current_user=Depends(RoleChecker(PORTFOLIO_WRITE_ROLES)),
+):
+    res = db.execute(text("SHOW app.current_institution_id")).scalar()
+    if not res or res == "":
+        raise HTTPException(
+            status_code=400,
+            detail="X-Institution-ID header or token is required to create a portfolio",
+        )
+    portfolio = models.Portfolio(
+        institution_id=uuid.UUID(res),
+        name=name,
+        strategy_type=strategy_type,
+    )
+    db.add(portfolio)
+    db.commit()
+    db.refresh(portfolio)
+    return {
+        "id": str(portfolio.id),
+        "name": portfolio.name,
+        "strategy_type": portfolio.strategy_type,
+        "institution_id": str(portfolio.institution_id),
+    }
+
+
+@app.get("/portfolios")
+def list_portfolios(
+    db: Session = Depends(get_db),
+    current_user=Depends(RoleChecker(READ_ROLES)),
+):
+    res = db.execute(text("SHOW app.current_institution_id")).scalar()
+    if not res or res == "":
+        raise HTTPException(
+            status_code=400,
+            detail="X-Institution-ID header or token is required to retrieve portfolios",
+        )
+    portfolios = db.query(models.Portfolio).all()
+    return [
+        {
+            "id": str(p.id),
+            "name": p.name,
+            "strategy_type": p.strategy_type,
+            "institution_id": str(p.institution_id),
+        }
+        for p in portfolios
+    ]
+
 
 @app.get("/portfolios/{portfolio_id}/holdings")
 def list_portfolio_holdings(
@@ -260,7 +289,6 @@ def list_portfolio_holdings(
     res = db.execute(text("SHOW app.current_institution_id")).scalar()
     if not res or res == "":
         raise HTTPException(status_code=400, detail="X-Institution-ID header or token is required")
-    
     holdings = db.query(models.Holding).filter(models.Holding.portfolio_id == portfolio_id).all()
     return [
         {
@@ -270,10 +298,11 @@ def list_portfolio_holdings(
             "weight": h.weight,
             "cost_basis": h.cost_basis,
             "conviction_score": h.conviction_score,
-            "updated_at": h.updated_at.isoformat()
+            "updated_at": h.updated_at.isoformat(),
         }
         for h in holdings
     ]
+
 
 class HoldingUpdate(BaseModel):
     ticker: str
@@ -281,33 +310,32 @@ class HoldingUpdate(BaseModel):
     cost_basis: float
     conviction_score: Optional[int] = None
 
+
 @app.post("/portfolios/{portfolio_id}/holdings")
 def update_portfolio_holdings(
-    portfolio_id: uuid.UUID, 
-    holdings_data: List[HoldingUpdate], 
+    portfolio_id: uuid.UUID,
+    holdings_data: List[HoldingUpdate],
     db: Session = Depends(get_db),
     current_user=Depends(RoleChecker(HOLDINGS_WRITE_ROLES)),
 ):
     res = db.execute(text("SHOW app.current_institution_id")).scalar()
     if not res or res == "":
         raise HTTPException(status_code=400, detail="X-Institution-ID header or token is required")
-    
-    # Clear existing holdings and save the new ones
     db.query(models.Holding).filter(models.Holding.portfolio_id == portfolio_id).delete()
-    
     new_holdings = [
         models.Holding(
             portfolio_id=portfolio_id,
             ticker=h.ticker.upper(),
             weight=h.weight,
             cost_basis=h.cost_basis,
-            conviction_score=h.conviction_score
+            conviction_score=h.conviction_score,
         )
         for h in holdings_data
     ]
     db.add_all(new_holdings)
     db.commit()
     return {"status": "success", "count": len(new_holdings)}
+
 
 @app.get("/ips_rules")
 def list_ips_rules(
@@ -317,7 +345,6 @@ def list_ips_rules(
     res = db.execute(text("SHOW app.current_institution_id")).scalar()
     if not res or res == "":
         raise HTTPException(status_code=400, detail="X-Institution-ID header or token is required")
-    
     rules = db.query(models.IPSRule).all()
     return [
         {
@@ -325,8 +352,54 @@ def list_ips_rules(
             "institution_id": str(r.institution_id),
             "rule_type": r.rule_type,
             "threshold": r.threshold,
-            "severity": r.severity
+            "severity": r.severity,
         }
         for r in rules
     ]
 
+
+# ── User management (admin only) ──────────────────────────────────────────────
+
+class RoleUpdate(BaseModel):
+    role: str
+
+
+@app.patch("/users/{user_id}/role")
+def update_user_role(
+    user_id: uuid.UUID,
+    payload: RoleUpdate,
+    current_user=Depends(RoleChecker(ADMIN_ROLES)),
+):
+    """
+    Assigns a new role to a user within the same institution.
+    Admin-only. This is the only way to grant privileged roles (pm, trustee, admin)
+    since self-registration is limited to analyst/sector_lead/faculty.
+    """
+    if payload.role not in _ALL_ROLES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid role. Must be one of: {', '.join(_ALL_ROLES)}",
+        )
+
+    with get_superuser_session() as db:
+        target = db.query(models.User).filter(models.User.id == user_id).first()
+
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        if str(target.institution_id) != str(current_user.institution_id):
+            raise HTTPException(
+                status_code=403,
+                detail="You may only manage users within your own institution",
+            )
+
+        if target.id == current_user.id and payload.role != "admin":
+            raise HTTPException(
+                status_code=400,
+                detail="Admins cannot demote themselves to prevent lockouts",
+            )
+
+        target.role = payload.role
+        db.commit()
+
+    return {"user_id": str(user_id), "role": payload.role}

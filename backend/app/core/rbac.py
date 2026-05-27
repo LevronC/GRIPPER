@@ -1,5 +1,8 @@
 """Role-based access control constants for API endpoints."""
 
+# Every valid role in the system (used for validation)
+ALL_ROLES = ["analyst", "sector_lead", "pm", "faculty", "trustee", "admin"]
+
 # All authenticated tenant users (read-only baseline)
 READ_ROLES = ["analyst", "sector_lead", "pm", "faculty", "trustee", "admin"]
 
