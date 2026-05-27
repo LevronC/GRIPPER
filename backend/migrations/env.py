@@ -1,7 +1,7 @@
 import os
 import sys
 from logging.config import fileConfig
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import create_engine, pool
 
 # Add backend root to path
 sys.path.insert(0, os.path.realpath(os.path.join(os.path.dirname(__file__), '..')))
@@ -21,7 +21,10 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # Set DB URL dynamically from env if available
-db_url = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/gripper")
+db_url = os.getenv("SUPERUSER_DATABASE_URL") or os.getenv(
+    "DATABASE_URL",
+    "postgresql://postgres:postgres@localhost:5432/gripper",
+)
 config.set_main_option("sqlalchemy.url", db_url)
 
 target_metadata = Base.metadata
@@ -63,10 +66,11 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
-    connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
+    connect_args = {"sslmode": "require"} if "supabase.co" in db_url else {}
+    connectable = create_engine(
+        db_url,
         poolclass=pool.NullPool,
+        connect_args=connect_args,
     )
 
     with connectable.connect() as connection:

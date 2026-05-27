@@ -1,25 +1,11 @@
 import os
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy.orm import Session
-from sqlalchemy import text
-import uuid
-from pydantic import BaseModel
-from typing import List, Optional
-from jose import jwt, JWTError
-
-from .db.session import get_db, _engine_kwargs
-from .db.seed import seed_default_data, DEFAULT_INSTITUTIONS
-from . import models
-from .api.endpoints import router as api_router
-from app.api.auth import router as auth_router, get_superuser_session
-from app.api.deps import get_current_user, RoleChecker
-from app.core.database_url import database_url_error_hint
-from app.core.config import settings
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import OperationalError
 
@@ -28,6 +14,11 @@ public_bearer = HTTPBearer(auto_error=False)
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    try:
+        run_migrations()
+    except Exception as exc:
+        logger = logging.getLogger(__name__)
+        logger.warning("Database migration skipped or failed (%s)", exc)
     seed_default_data()
     yield
 

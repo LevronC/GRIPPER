@@ -133,6 +133,8 @@ After the database is connected, the API seeds default institutions and a demo a
 
 Run migrations against production Postgres before first deploy: `cd backend && alembic upgrade head`
 
+On Vercel, migrations also run automatically on API cold start (creates `users`, `institutions`, etc., then seeds demo data).
+
 ## Scrapling reference scrape
 
 ```bash

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import create_engine
-from sqlalchemy.exc import IntegrityError, OperationalError
+from sqlalchemy.exc import IntegrityError, OperationalError, ProgrammingError
 from pydantic import BaseModel, EmailStr, validator
 import uuid
 import random
@@ -112,6 +112,11 @@ def register_user(user_in: UserRegister):
             detail="A user with this email is already registered.",
         )
     except OperationalError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=database_url_error_hint(settings.SUPERUSER_DATABASE_URL, exc),
+        ) from exc
+    except ProgrammingError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=database_url_error_hint(settings.SUPERUSER_DATABASE_URL, exc),
