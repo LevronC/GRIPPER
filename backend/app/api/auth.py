@@ -14,6 +14,7 @@ from jose import jwt, JWTError
 import logging
 
 from app.db.migrate import ensure_database_ready
+from app.db.session import _engine_kwargs
 from app.core.database_url import database_url_error_hint
 from app import models
 from app.core import security
