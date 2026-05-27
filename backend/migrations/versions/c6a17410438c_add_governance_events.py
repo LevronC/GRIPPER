@@ -51,8 +51,17 @@ def upgrade() -> None:
         "USING (institution_id = NULLIF(current_setting('app.current_institution_id', true), '')::uuid);"
     )
     
-    # Grant permissions to gripper_app non-superuser role
-    op.execute("GRANT ALL PRIVILEGES ON TABLE governance_events TO gripper_app;")
+    # Grant permissions to gripper_app non-superuser role (local Docker only)
+    op.execute(
+        """
+        DO $$
+        BEGIN
+            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'gripper_app') THEN
+                GRANT ALL PRIVILEGES ON TABLE governance_events TO gripper_app;
+            END IF;
+        END $$;
+        """
+    )
 
 
 
