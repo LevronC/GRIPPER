@@ -33,7 +33,11 @@ def database_url_error_hint(url: str, exc: Exception | None = None) -> str:
         )
 
     if "relation" in message and "does not exist" in message:
-        return "Database schema is missing. Run `cd backend && alembic upgrade head` against production."
+        return (
+            "Database schema is missing. Migrations have not been applied yet. "
+            "Redeploy after setting SUPERUSER_DATABASE_URL (Supabase session/direct "
+            "connection, not transaction pooler) and check /api/health/db."
+        )
 
     return f"Database connection failed: {message or 'unknown error'}"
 

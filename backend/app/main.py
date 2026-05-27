@@ -21,8 +21,8 @@ from app.core.database_url import database_url_error_hint
 
 from . import models
 from .api.endpoints import router as api_router
-from .db.migrate import run_migrations
-from .db.seed import seed_default_data, DEFAULT_INSTITUTIONS
+from .db.migrate import ensure_database_ready
+from .db.seed import DEFAULT_INSTITUTIONS
 from .db.session import get_db, _engine_kwargs
 
 SWAGGER_OPENAPI_URL = os.getenv("SWAGGER_OPENAPI_URL", "/openapi.json")
@@ -30,12 +30,11 @@ public_bearer = HTTPBearer(auto_error=False)
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    logger = logging.getLogger(__name__)
     try:
-        run_migrations()
+        ensure_database_ready()
     except Exception as exc:
-        logger = logging.getLogger(__name__)
-        logger.warning("Database migration skipped or failed (%s)", exc)
-    seed_default_data()
+        logger.warning("Database bootstrap skipped or failed (%s)", exc)
     yield
 
 
@@ -89,13 +88,23 @@ def health_check():
 @app.get("/health/db")
 def health_db_check():
     try:
-        engine = create_engine(
-            settings.DATABASE_URL,
-            **_engine_kwargs(settings.DATABASE_URL),
-        )
+        db_url = settings.SUPERUSER_DATABASE_URL or settings.DATABASE_URL
+        engine = create_engine(db_url, **_engine_kwargs(db_url))
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
-        return {"status": "ok", "database": "connected"}
+            users_exists = conn.execute(
+                text(
+                    "SELECT EXISTS ("
+                    "SELECT 1 FROM information_schema.tables "
+                    "WHERE table_schema = 'public' AND table_name = 'users'"
+                    ")"
+                )
+            ).scalar()
+        return {
+            "status": "ok",
+            "database": "connected",
+            "schema_ready": bool(users_exists),
+        }
     except OperationalError as exc:
         raise HTTPException(
             status_code=503,

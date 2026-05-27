@@ -11,7 +11,9 @@ from typing import Optional
 from datetime import datetime
 from jose import jwt, JWTError
 
-from app.db.session import _engine_kwargs
+import logging
+
+from app.db.migrate import ensure_database_ready
 from app.core.database_url import database_url_error_hint
 from app import models
 from app.core import security
@@ -62,6 +64,14 @@ class Token(BaseModel):
 
 @router.post("/register", status_code=201)
 def register_user(user_in: UserRegister):
+    try:
+        ensure_database_ready()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Database setup failed: {exc}",
+        ) from exc
+
     valid_roles = ["analyst", "sector_lead", "pm", "faculty", "trustee", "admin"]
     if user_in.role not in valid_roles:
         raise HTTPException(
