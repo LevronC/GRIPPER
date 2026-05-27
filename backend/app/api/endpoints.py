@@ -29,11 +29,11 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-_task_queue: Queue | None = None
+_task_queue: Optional[Queue] = None
 _task_queue_checked = False
 
 
-def get_task_queue() -> Queue | None:
+def get_task_queue() -> Optional[Queue]:
     """
     Returns an RQ Queue if Redis is reachable, otherwise None.
     Result is cached for the lifetime of the process / warm function instance.
