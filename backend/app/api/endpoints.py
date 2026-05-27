@@ -7,7 +7,10 @@ from fastapi import APIRouter, Depends, HTTPException, File, Form, Request, Uplo
 from sqlalchemy import select, and_, func, text
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
-from rq import Queue
+try:
+    from rq import Queue
+except ImportError:
+    Queue = None  # type: ignore[assignment,misc]
 
 from app.core.config import settings
 from app.core.redis_client import get_redis_client
@@ -26,30 +29,27 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-_redis_conn = None
-_queue = None
+_task_queue: Queue | None = None
+_task_queue_checked = False
 
 
 def get_task_queue() -> Queue | None:
-    global _redis_conn, _queue
-    if _queue is not None:
-        return _queue
-    _redis_conn = get_redis_client()
-    if not _redis_conn:
-        return None
-    _queue = Queue("default", connection=_redis_conn)
-    return _queue
-
-
-class _QueueProxy:
-    def __getattr__(self, name):
-        queue = get_task_queue()
-        if queue is None:
-            raise RuntimeError("Redis is not configured; background jobs are unavailable.")
-        return getattr(queue, name)
-
-
-queue = _QueueProxy()
+    """
+    Returns an RQ Queue if Redis is reachable, otherwise None.
+    Result is cached for the lifetime of the process / warm function instance.
+    On Vercel, Redis is optional — documents are processed by the cron job.
+    """
+    global _task_queue, _task_queue_checked
+    if _task_queue_checked:
+        return _task_queue
+    _task_queue_checked = True
+    redis_conn = get_redis_client()
+    if redis_conn:
+        try:
+            _task_queue = Queue("default", connection=redis_conn)
+        except Exception as exc:
+            logger.warning("Could not create RQ queue: %s", exc)
+    return _task_queue
 
 
 # ── Document upload ────────────────────────────────────────────────────────────
