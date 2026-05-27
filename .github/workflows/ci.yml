@@ -99,4 +99,11 @@ jobs:
         run: ruff check tests app/core/rbac.py app/api/deps.py app/db/migrate.py
       - name: Pytest
         working-directory: backend
-        run: pytest tests/ -v --cov=app --cov-report=term-missing
+        run: |
+          if ! pytest tests/ -v --tb=short 2>&1 | tee /tmp/pytest_out.txt; then
+            echo "## Pytest failures" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            cat /tmp/pytest_out.txt >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
