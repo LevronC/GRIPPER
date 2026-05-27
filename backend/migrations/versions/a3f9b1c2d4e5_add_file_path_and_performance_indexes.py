@@ -31,32 +31,18 @@ def upgrade() -> None:
     )
 
     # ── pgvector HNSW index ───────────────────────────────────────────────────
-    # Reduces semantic search from O(n) full-table-scan to O(log n) approximate
-    # nearest neighbor. HNSW requires pgvector >= 0.5.0 (released Oct 2023).
-    # The DO block checks for the access method before creating the index so
-    # this migration is backward-compatible with older pgvector installations
-    # (CI, air-gapped envs, etc.).
+    # Requires pgvector >= 0.5.0. The EXCEPTION block makes this migration
+    # forward- and backward-compatible: on older pgvector the CREATE INDEX
+    # raises an error, which is caught and logged as a NOTICE so the migration
+    # succeeds without the index. The index can be created manually later.
     op.execute("""
         DO $$
         BEGIN
-            IF EXISTS (SELECT 1 FROM pg_am WHERE amname = 'hnsw') THEN
-                IF NOT EXISTS (
-                    SELECT 1 FROM pg_indexes
-                    WHERE tablename = 'document_chunks'
-                      AND indexname = 'idx_chunks_embedding_hnsw'
-                ) THEN
-                    EXECUTE '
-                        CREATE INDEX idx_chunks_embedding_hnsw
-                        ON document_chunks
-                        USING hnsw (embedding vector_cosine_ops)
-                        WITH (m = 16, ef_construction = 64)
-                    ';
-                END IF;
-            ELSE
-                RAISE NOTICE
-                    ''HNSW access method not available (pgvector < 0.5.0). ''
-                    ''Skipping vector index — upgrade pgvector to enable it.'';
-            END IF;
+            EXECUTE 'CREATE INDEX IF NOT EXISTS idx_chunks_embedding_hnsw
+                     ON document_chunks USING hnsw (embedding vector_cosine_ops)
+                     WITH (m = 16, ef_construction = 64)';
+        EXCEPTION WHEN OTHERS THEN
+            RAISE NOTICE 'Skipping HNSW index (pgvector < 0.5.0 or unsupported): %', SQLERRM;
         END $$;
     """)
 
