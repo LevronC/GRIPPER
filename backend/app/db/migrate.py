@@ -35,7 +35,8 @@ def run_migrations() -> None:
 
     cfg = Config(os.path.join(backend_dir, "alembic.ini"))
     cfg.set_main_option("script_location", os.path.join(backend_dir, "migrations"))
-    cfg.set_main_option("sqlalchemy.url", db_url)
+    # ConfigParser treats % as interpolation; URL-encoded passwords need doubling.
+    cfg.set_main_option("sqlalchemy.url", db_url.replace("%", "%%"))
 
     logger.info("Running Alembic migrations")
     command.upgrade(cfg, "head")
