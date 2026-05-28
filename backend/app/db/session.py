@@ -1,17 +1,26 @@
-import os
 from typing import Generator
 
 from fastapi import HTTPException, Request
 from sqlalchemy import create_engine, text
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import OperationalError, ProgrammingError, DatabaseError
 from sqlalchemy.orm import sessionmaker
 
 from app.core.config import settings
 from app.core.database_url import database_url_error_hint, validate_database_url
 
+_SSL_HOSTS = ("supabase.co", "neon.tech", "neon.database", "vercel-postgres.com")
+
+
+def _normalize_url(url: str) -> str:
+    """SQLAlchemy 2.0 requires 'postgresql://' — Vercel Postgres provides 'postgres://'."""
+    if url.startswith("postgres://"):
+        return "postgresql://" + url[len("postgres://"):]
+    return url
+
+
 def _engine_kwargs(url: str) -> dict:
     kwargs = {"pool_pre_ping": True}
-    if "supabase.co" in url:
+    if any(host in url for host in _SSL_HOSTS):
         kwargs["connect_args"] = {"sslmode": "require"}
     return kwargs
 
@@ -25,7 +34,8 @@ for _label, _url in (
         # Do not crash import on local dev; production requests will surface the error.
         pass
 
-engine = create_engine(settings.DATABASE_URL, **_engine_kwargs(settings.DATABASE_URL))
+_db_url = _normalize_url(settings.DATABASE_URL)
+engine = create_engine(_db_url, **_engine_kwargs(_db_url))
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def get_db(request: Request) -> Generator:
@@ -43,7 +53,7 @@ def get_db(request: Request) -> Generator:
             db.execute(text("SET LOCAL app.current_institution_id = ''"))
         yield db
         db.commit()
-    except OperationalError as exc:
+    except (OperationalError, ProgrammingError, DatabaseError) as exc:
         db.rollback()
         raise HTTPException(
             status_code=503,

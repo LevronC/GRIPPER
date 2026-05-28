@@ -9,7 +9,7 @@ import random
 import string
 from typing import Optional
 from datetime import datetime
-from jose import jwt, JWTError
+from jose import jwt
 
 import logging
 
@@ -35,13 +35,18 @@ _super_engine = None
 _super_session_factory = None
 
 
+def _normalize_url(url: str) -> str:
+    """SQLAlchemy 2.0 requires 'postgresql://' — Vercel Postgres gives 'postgres://'."""
+    if url.startswith("postgres://"):
+        return "postgresql://" + url[len("postgres://"):]
+    return url
+
+
 def get_superuser_session():
     global _super_engine, _super_session_factory
     if _super_engine is None:
-        _super_engine = create_engine(
-            settings.SUPERUSER_DATABASE_URL,
-            **_engine_kwargs(settings.SUPERUSER_DATABASE_URL),
-        )
+        url = _normalize_url(settings.SUPERUSER_DATABASE_URL)
+        _super_engine = create_engine(url, **_engine_kwargs(url))
         _super_session_factory = sessionmaker(bind=_super_engine)
     return _super_session_factory()
 

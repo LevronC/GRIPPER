@@ -14,7 +14,7 @@ except ImportError:
 
 from app.core.config import settings
 from app.core.redis_client import get_redis_client
-from app.core.blob import store_upload, delete_blob
+from app.core.blob import store_upload
 from app.core.errors import internal_error
 from app.db.session import get_db
 from app import models
@@ -194,14 +194,29 @@ def list_documents(
     page_size = min(page_size, 100)
     offset = (page - 1) * page_size
 
-    total = db.query(func.count(models.ResearchReport.id)).scalar()
-    reports = (
-        db.query(models.ResearchReport)
-        .order_by(models.ResearchReport.created_at.desc())
-        .offset(offset)
-        .limit(page_size)
-        .all()
-    )
+    # Select only the columns this endpoint actually returns — never include
+    # schema-optional columns like file_path so we stay resilient during
+    # rolling migrations where the column may not yet exist in all replicas.
+    _cols = [
+        models.ResearchReport.id,
+        models.ResearchReport.sector,
+        models.ResearchReport.company,
+        models.ResearchReport.recommendation,
+        models.ResearchReport.status,
+        models.ResearchReport.created_at,
+    ]
+    try:
+        total = db.query(func.count(models.ResearchReport.id)).scalar()
+        rows = (
+            db.query(*_cols)
+            .order_by(models.ResearchReport.created_at.desc())
+            .offset(offset)
+            .limit(page_size)
+            .all()
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, **internal_error(e, "list_documents"))
+
     return {
         "total": total,
         "page": page,
@@ -215,7 +230,7 @@ def list_documents(
                 "status": r.status,
                 "created_at": r.created_at.isoformat(),
             }
-            for r in reports
+            for r in rows
         ],
     }
 

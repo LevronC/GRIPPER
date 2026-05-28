@@ -22,24 +22,42 @@ def _backend_dir() -> str:
     return os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
 
+def _normalize_db_url(url: str) -> str:
+    """
+    Normalize database URLs for SQLAlchemy 2.0.
+    Vercel Postgres / Neon provides 'postgres://' but SQLAlchemy requires 'postgresql://'.
+    """
+    if url.startswith("postgres://"):
+        url = "postgresql://" + url[len("postgres://"):]
+    return url
+
+
 def run_migrations() -> None:
-    db_url = settings.SUPERUSER_DATABASE_URL or settings.DATABASE_URL
+    raw_url = settings.SUPERUSER_DATABASE_URL or settings.DATABASE_URL
+    db_url = _normalize_db_url(raw_url)
     backend_dir = _backend_dir()
+
+    logger.info("Running Alembic migrations (backend_dir=%s)", backend_dir)
 
     try:
         engine = create_engine(db_url, **_engine_kwargs(db_url))
         with engine.begin() as conn:
             conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+        engine.dispose()
     except Exception as exc:
-        logger.warning("Could not ensure pgvector extension (%s)", exc)
+        logger.warning("Could not ensure pgvector extension: %s", exc)
 
     cfg = Config(os.path.join(backend_dir, "alembic.ini"))
     cfg.set_main_option("script_location", os.path.join(backend_dir, "migrations"))
     # ConfigParser treats % as interpolation; URL-encoded passwords need doubling.
     cfg.set_main_option("sqlalchemy.url", db_url.replace("%", "%%"))
 
-    logger.info("Running Alembic migrations")
-    command.upgrade(cfg, "head")
+    try:
+        command.upgrade(cfg, "head")
+        logger.info("Alembic migrations completed successfully")
+    except Exception as exc:
+        logger.exception("Alembic migration failed: %s", exc)
+        raise
 
 
 def ensure_database_ready() -> None:
