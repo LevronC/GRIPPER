@@ -122,7 +122,7 @@ Set production environment variables in Vercel:
 
 | Variable | Required | Notes |
 |----------|----------|-------|
-| `DATABASE_URL` | Yes | PostgreSQL with `pgvector`. On Vercel + Supabase, use the **Session pooler** on port **6543**. URL-encode password specials (`@` → `%40`). |
+| `DATABASE_URL` | Yes | PostgreSQL with `pgvector`. On Vercel + Supabase, use the **Transaction pooler** (`aws-<region>.pooler.supabase.com`) on port **6543** with `sslmode=require`. URL-encode password specials (`@` → `%40`). |
 | `REDIS_URL` | Yes | Token blacklist + RQ (must start with `redis://` or `rediss://`) |
 | `SECRET_KEY` | Yes | JWT signing key |
 | `SUPERUSER_DATABASE_URL` | Recommended | Same encoded Supabase pooler URL as `DATABASE_URL` |

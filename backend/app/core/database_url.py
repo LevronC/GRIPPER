@@ -52,10 +52,15 @@ def database_url_error_hint(url: str, exc: Exception | None = None) -> str:
             "(for example, replace @ with %40), then redeploy."
         )
 
-    if "connection refused" in message or "timeout" in message:
+    if (
+        "connection refused" in message
+        or "timeout" in message
+        or "cannot assign requested address" in message
+    ):
         return (
-            "Could not reach the database. On Vercel + Supabase, use the Session pooler "
-            "URL on port 6543 with sslmode=require."
+            "Could not reach the database. Vercel cannot connect to Supabase's IPv6-only "
+            "direct database host. Use the Supabase Transaction pooler URL "
+            "(aws-<region>.pooler.supabase.com:6543) with sslmode=require."
         )
 
     if "relation" in message and "does not exist" in message:
@@ -76,4 +81,3 @@ def validate_database_url(url: str, label: str = "DATABASE_URL") -> None:
 
     if parsed.host and "@" in parsed.host:
         raise ValueError(database_url_error_hint(url))
-
