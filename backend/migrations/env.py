@@ -20,10 +20,15 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
+from app.core.database_url import safe_encode_database_url
+
 # Set DB URL dynamically from env if available
-db_url = os.getenv("SUPERUSER_DATABASE_URL") or os.getenv(
-    "DATABASE_URL",
-    "postgresql://postgres:postgres@localhost:5432/gripper",
+db_url = safe_encode_database_url(
+    os.getenv("SUPERUSER_DATABASE_URL")
+    or os.getenv(
+        "DATABASE_URL",
+        "postgresql://postgres:postgres@localhost:5432/gripper",
+    )
 )
 config.set_main_option("sqlalchemy.url", db_url.replace("%", "%%"))
 
@@ -66,7 +71,7 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
-    connect_args = {"sslmode": "require"} if "supabase.co" in db_url else {}
+    connect_args = {"sslmode": "require"} if any(h in db_url for h in ("supabase.co", "supabase.com")) else {}
     connectable = create_engine(
         db_url,
         poolclass=pool.NullPool,

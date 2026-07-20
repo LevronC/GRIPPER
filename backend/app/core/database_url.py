@@ -1,7 +1,33 @@
 from __future__ import annotations
 
+import re
+from urllib.parse import quote_plus, unquote
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError
+
+
+def safe_encode_database_url(url: str) -> str:
+    """
+    Safely URL-encodes special characters in the password component of a PostgreSQL connection URL.
+    This prevents breakdown in SQLAlchemy URL parsing when passwords contain symbols like @, #, ?, /, :, %, &.
+    """
+    if not url:
+        return url
+
+    pattern = r"^(postgresql(?:\+[a-z0-9_]+)?://)([^:]+):(.*)@([^/@]+)(/[^?]*)(?:\?(.*))?$"
+    match = re.match(pattern, url)
+    if not match:
+        return url
+
+    scheme, username, password, host_port, path, query = match.groups()
+
+    clean_password = unquote(password)
+    encoded_password = quote_plus(clean_password)
+
+    res = f"{scheme}{username}:{encoded_password}@{host_port}{path}"
+    if query:
+        res += f"?{query}"
+    return res
 
 
 def database_url_error_hint(url: str, exc: Exception | None = None) -> str:
@@ -50,3 +76,4 @@ def validate_database_url(url: str, label: str = "DATABASE_URL") -> None:
 
     if parsed.host and "@" in parsed.host:
         raise ValueError(database_url_error_hint(url))
+

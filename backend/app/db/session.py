@@ -6,13 +6,14 @@ from sqlalchemy.exc import OperationalError, ProgrammingError, DatabaseError
 from sqlalchemy.orm import sessionmaker
 
 from app.core.config import settings
-from app.core.database_url import database_url_error_hint, validate_database_url
+from app.core.database_url import database_url_error_hint, safe_encode_database_url, validate_database_url
 
-_SSL_HOSTS = ("supabase.co", "neon.tech", "neon.database", "vercel-postgres.com")
+_SSL_HOSTS = ("supabase.co", "supabase.com", "pooler.supabase.com", "neon.tech", "neon.database", "vercel-postgres.com")
 
 
 def _normalize_url(url: str) -> str:
     """SQLAlchemy 2.0 requires 'postgresql://' — Vercel Postgres provides 'postgres://'."""
+    url = safe_encode_database_url(url)
     if url.startswith("postgres://"):
         return "postgresql://" + url[len("postgres://"):]
     return url
