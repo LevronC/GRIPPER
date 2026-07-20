@@ -8,7 +8,7 @@ import { Footer } from '../landing/components/Footer'
 
 export default function LandingPage() {
   return (
-    <div className="landing-theme app-theme min-h-svh bg-canvas text-ink">
+    <div className="landing-theme min-h-svh bg-canvas text-ink">
       <Navbar />
       <main>
         <Hero />

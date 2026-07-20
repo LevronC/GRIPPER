@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { navLinks } from '../data/content'
-import { BrandLogo } from '../../components/ui/BrandLogo'
 import { routes, terminalPath } from '../../lib/routes'
 
 export function Navbar() {
   const [scrolled, setScrolled] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const location = useLocation()
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 12)
@@ -15,7 +15,11 @@ export function Navbar() {
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
-  const closeMenu = () => setMenuOpen(false)
+  useEffect(() => {
+    setMenuOpen(false)
+  }, [location.pathname])
+
+  const homeHref = routes.home
 
   return (
     <header
@@ -24,7 +28,9 @@ export function Navbar() {
       }`}
     >
       <div className="container-wide flex items-center justify-between gap-4 px-[clamp(1.25rem,4vw,4rem)] py-4">
-        <BrandLogo />
+        <Link to={homeHref} className="font-display text-xl tracking-tight text-ink">
+          GRIPPER<span className="text-accent">.terminal</span>
+        </Link>
 
         <nav className="hidden items-center gap-8 lg:flex" aria-label="Primary">
           {navLinks.map((link) => (
@@ -78,18 +84,18 @@ export function Navbar() {
         <div className="border-t border-white/5 bg-canvas/95 px-6 py-6 backdrop-blur-xl lg:hidden">
           <nav className="flex flex-col gap-4" aria-label="Mobile">
             {navLinks.map((link) => (
-              <a key={link.label} href={link.href} className="text-base text-ink" onClick={closeMenu}>
+              <a key={link.label} href={link.href} className="text-base text-ink">
                 {link.label}
               </a>
             ))}
-            <Link to={routes.docs} className="text-base text-ink" onClick={closeMenu}>
+            <Link to={routes.docs} className="text-base text-ink">
               Docs
             </Link>
             <div className="mt-4 flex flex-col gap-3 border-t border-white/10 pt-4">
-              <Link to={terminalPath('login')} className="text-ink-muted" onClick={closeMenu}>
+              <Link to={terminalPath('login')} className="text-ink-muted">
                 Log in
               </Link>
-              <Link to={terminalPath('register')} className="pill-btn bg-accent text-accent-ink" onClick={closeMenu}>
+              <Link to={terminalPath('register')} className="pill-btn bg-accent text-accent-ink">
                 Open terminal
               </Link>
             </div>

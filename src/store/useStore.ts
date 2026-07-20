@@ -1,6 +1,5 @@
 import { create } from 'zustand';
-import { apiUrl, parseApiError } from '../lib/api';
-import { DEFAULT_INSTITUTIONS } from '../lib/defaultInstitutions';
+import { apiUrl } from '../lib/api';
 
 export interface Institution {
   id: string;
@@ -82,8 +81,6 @@ interface GripperState {
   // Auth Actions
     login: (email: string, password: string, instId: string) => Promise<{ ok: boolean; error?: string }>;
   register: (email: string, password: string, instId: string, role: string, graduationYear?: number) => Promise<{ success: boolean; error?: string }>;
-  requestPasswordReset: (email: string) => Promise<{ success: boolean; error?: string }>;
-  resetPassword: (email: string, code: string, newPassword: string, instId: string) => Promise<{ ok: boolean; error?: string }>;
   logout: () => void;
 
   fetchInstitutions: () => Promise<void>;
@@ -194,13 +191,11 @@ export const useStore = create<GripperState>((set, get) => {
           await get().fetchInstitutions();
           return { ok: true };
         }
-        const err = await parseApiError(
-          res,
-          res.status === 403
-            ? 'Account not verified. Complete email verification before logging in.'
-            : 'Invalid credentials. Check your email, password, and institution.',
-        );
-        return { ok: false, error: err };
+        const err = await res.json().catch(() => ({ detail: 'Invalid credentials.' }));
+        return {
+          ok: false,
+          error: typeof err.detail === 'string' ? err.detail : 'Invalid credentials. Check your password, verification status, or institution selection.',
+        };
       } catch (err) {
         console.error('Login error', err);
         return { ok: false, error: 'Network connection failed. Is the backend running on port 8000?' };
@@ -228,78 +223,13 @@ export const useStore = create<GripperState>((set, get) => {
         });
         if (res.ok) {
           return { success: true };
+        } else {
+          const data = await res.json();
+          return { success: false, error: data.detail || 'Registration failed.' };
         }
-        const error = await parseApiError(res, 'Registration failed.');
-        return { success: false, error };
       } catch (err) {
         console.error('Registration error', err);
         return { success: false, error: 'Network connection failed.' };
-      } finally {
-        set({ isLoading: false });
-      }
-    },
-
-    requestPasswordReset: async (email) => {
-      set({ isLoading: true });
-      try {
-        const res = await fetch(apiUrl('/auth/forgot-password'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email }),
-        });
-        if (res.ok) {
-          return { success: true };
-        }
-        const error = await parseApiError(res, 'Could not send reset code.');
-        return { success: false, error };
-      } catch (err) {
-        console.error('Forgot password error', err);
-        return { success: false, error: 'Network connection failed. Is the backend running on port 8000?' };
-      } finally {
-        set({ isLoading: false });
-      }
-    },
-
-    resetPassword: async (email, code, newPassword, instId) => {
-      set({ isLoading: true });
-      try {
-        const res = await fetch(apiUrl('/auth/reset-password'), {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Institution-ID': instId,
-          },
-          body: JSON.stringify({ email, code, new_password: newPassword }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (instId && data.institution_id !== instId) {
-            return {
-              ok: false,
-              error: 'Selected institution does not match your account.',
-            };
-          }
-          localStorage.setItem('gripper_token', data.access_token);
-          const userPayload = {
-            id: data.user_id,
-            email: data.email ?? email,
-            role: data.role,
-            institution_id: data.institution_id,
-            graduation_year: data.graduation_year ?? null,
-          };
-          localStorage.setItem('gripper_user', JSON.stringify(userPayload));
-          set({
-            token: data.access_token,
-            currentUser: userPayload,
-          });
-          await get().fetchInstitutions();
-          return { ok: true };
-        }
-        const error = await parseApiError(res, 'Password reset failed.');
-        return { ok: false, error };
-      } catch (err) {
-        console.error('Reset password error', err);
-        return { ok: false, error: 'Network connection failed. Is the backend running on port 8000?' };
       } finally {
         set({ isLoading: false });
       }
@@ -334,26 +264,23 @@ export const useStore = create<GripperState>((set, get) => {
         const res = await fetch(apiUrl('/institutions'));
         if (res.ok) {
           const data = await res.json();
-          const institutions = Array.isArray(data) && data.length > 0 ? data : DEFAULT_INSTITUTIONS;
-          set({ institutions });
-
+          set({ institutions: data });
+          
+          // Auto-select logged-in user's institution first, or default to first
           const user = get().currentUser;
           if (user) {
-            const userInst = institutions.find((i: Institution) => i.id === user.institution_id);
+            const userInst = data.find((i: Institution) => i.id === user.institution_id);
             if (userInst) {
               await get().setInstitution(userInst);
               return;
             }
           }
-          if (institutions.length > 0 && !get().currentInstitution) {
-            await get().setInstitution(institutions[0]);
+          if (data.length > 0 && !get().currentInstitution) {
+            await get().setInstitution(data[0]);
           }
-          return;
         }
-        set({ institutions: DEFAULT_INSTITUTIONS });
       } catch (err) {
         console.error('Failed to fetch institutions', err);
-        set({ institutions: DEFAULT_INSTITUTIONS });
       } finally {
         set({ isLoading: false });
       }

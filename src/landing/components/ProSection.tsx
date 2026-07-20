@@ -4,7 +4,7 @@ import { terminalPath } from '../../lib/routes'
 
 export function ProSection() {
   return (
-    <section id="institutions" className="section-pad scroll-mt-24 bg-canvas-warm">
+    <section id="institutions" className="section-pad bg-canvas-warm">
       <div className="container-wide">
         <div className="max-w-3xl reveal">
           <p className="text-sm font-medium uppercase tracking-[0.18em] text-accent">

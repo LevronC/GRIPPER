@@ -8,7 +8,7 @@ export function Products() {
   const current = productTabs.find((tab) => tab.id === active) ?? productTabs[0]
 
   return (
-    <section id="capabilities" className="section-pad scroll-mt-24 bg-accent text-accent-ink">
+    <section id="capabilities" className="section-pad bg-accent text-accent-ink">
       <div className="container-wide">
         <div className="mb-10 flex flex-wrap gap-2 sm:gap-3">
           {productTabs.map((tab) => (

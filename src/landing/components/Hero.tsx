@@ -5,7 +5,7 @@ import { PhoneMockup } from './Icons'
 
 export function Hero() {
   return (
-    <section id="platform" className="relative scroll-mt-28 overflow-hidden bg-canvas pt-28 section-pad lg:pt-36">
+    <section id="platform" className="relative overflow-hidden bg-canvas pt-28 section-pad lg:pt-36">
       <div
         className="pointer-events-none absolute inset-0 opacity-40"
         aria-hidden="true"

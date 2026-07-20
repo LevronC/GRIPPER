@@ -1,6 +1,5 @@
 import { Link } from 'react-router-dom'
 import { footerColumns } from '../data/content'
-import { BrandLogo } from '../../components/ui/BrandLogo'
 import { routes } from '../../lib/routes'
 
 function FooterLinkItem({ label, href, external }: { label: string; href: string; external?: boolean }) {
@@ -37,7 +36,9 @@ export function Footer() {
         <div className="container-wide">
           <div className="grid gap-10 border-b border-accent-ink/10 pb-12 md:grid-cols-2 lg:grid-cols-4">
             <div>
-              <BrandLogo size="md" className="text-2xl" />
+              <Link to={routes.home} className="font-display text-2xl tracking-tight">
+                GRIPPER<span className="text-accent">.terminal</span>
+              </Link>
               <p className="mt-4 max-w-xs text-sm leading-relaxed text-accent-ink/70">
                 Multi-tenant investment compliance and semantic intelligence for institutional
                 research teams and student equity programs.

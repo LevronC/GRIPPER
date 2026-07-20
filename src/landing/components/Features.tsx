@@ -51,7 +51,7 @@ export function Features() {
         </section>
       ))}
 
-      <section id="workflow" className="section-pad scroll-mt-24 bg-accent text-accent-ink">
+      <section id="workflow" className="section-pad bg-accent text-accent-ink">
         <div className="container-wide">
           <h2 className="font-display fluid-headline max-w-3xl font-normal">
             {enhanceSectionTitle}

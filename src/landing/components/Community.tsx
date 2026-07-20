@@ -22,7 +22,7 @@ export function Community() {
 
 export function TrustSection() {
   return (
-    <section id="security" className="section-pad scroll-mt-24 bg-band">
+    <section id="security" className="section-pad bg-band">
       <div className="container-wide">
         <h2 className="font-display fluid-headline text-center font-normal text-ink reveal">
           {trustGrid.title}

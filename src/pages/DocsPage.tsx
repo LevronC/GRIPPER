@@ -1,4 +1,4 @@
-import { SiteHeader } from '../components/ui/SiteHeader'
+import { Link } from 'react-router-dom'
 import { routes } from '../lib/routes'
 
 const sections = [
@@ -25,8 +25,6 @@ const sections = [
     items: [
       'POST /auth/register — create account (requires institution_id, role, .edu email)',
       'POST /auth/verify — confirm email with 6-digit code',
-      'POST /auth/forgot-password — request a 6-digit password reset code (dev: backend console)',
-      'POST /auth/reset-password — set new password with code; returns JWT and signs you in',
       'POST /auth/login — receive JWT access token',
       'POST /auth/logout — revoke token via Redis blacklist',
     ],
@@ -83,11 +81,25 @@ const sections = [
 
 export default function DocsPage() {
   return (
-    <div className="landing-theme app-theme min-h-svh bg-canvas text-ink">
-      <SiteHeader />
+    <div className="landing-theme min-h-svh bg-canvas text-ink">
+      <header className="border-b border-white/5 bg-canvas/90 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-4xl items-center justify-between px-6 py-4">
+          <Link to={routes.home} className="font-display text-xl tracking-tight">
+            GRIPPER<span className="text-accent">.terminal</span>
+          </Link>
+          <div className="flex items-center gap-4 text-sm">
+            <Link to={routes.home} className="text-ink-muted hover:text-ink">
+              Home
+            </Link>
+            <Link to={routes.terminalLogin} className="text-accent hover:text-accent-bright">
+              Open terminal
+            </Link>
+          </div>
+        </div>
+      </header>
 
-      <main className="container-wide mx-auto px-[clamp(1.25rem,4vw,4rem)] pb-16 pt-28">
-        <h1 className="font-display fluid-headline font-normal tracking-tight">Documentation</h1>
+      <main className="mx-auto max-w-4xl px-6 py-16">
+        <h1 className="font-display text-4xl tracking-tight md:text-5xl">Documentation</h1>
         <p className="mt-4 max-w-2xl text-ink-muted">
           Reference for developers and program administrators running GRIPPER locally or in
           production.
@@ -115,7 +127,7 @@ export default function DocsPage() {
               {section.items && (
                 <ul className="mt-4 space-y-2 text-sm leading-relaxed text-ink-muted">
                   {section.items.map((item) => (
-                    <li key={item} className="surface-card-elevated px-4 py-3 text-sm leading-relaxed text-ink-muted">
+                    <li key={item} className="rounded-xl border border-white/5 bg-white/5 px-4 py-3">
                       {item}
                     </li>
                   ))}
@@ -125,7 +137,7 @@ export default function DocsPage() {
           ))}
         </div>
 
-        <div className="mt-16 rounded-[2rem] border border-accent/20 bg-accent/10 p-8">
+        <div className="mt-16 rounded-2xl border border-accent/20 bg-accent/10 p-6">
           <h3 className="font-display text-xl">Interactive API reference</h3>
           <p className="mt-2 text-sm text-ink-muted">
             When the backend is running locally, FastAPI auto-generates OpenAPI docs.
@@ -134,7 +146,7 @@ export default function DocsPage() {
             href={routes.apiDocs}
             target="_blank"
             rel="noopener noreferrer"
-            className="pill-btn mt-4 bg-accent text-accent-ink hover:bg-accent-bright"
+            className="mt-4 inline-flex rounded-full bg-accent px-5 py-2.5 text-sm font-medium text-accent-ink hover:bg-accent-bright"
           >
             Open API docs
           </a>

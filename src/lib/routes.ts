@@ -8,7 +8,7 @@ export const routes = {
   apiDocs: '/api/docs',
 } as const
 
-export type AuthMode = 'login' | 'register' | 'verify' | 'forgot' | 'reset'
+export type AuthMode = 'login' | 'register' | 'verify'
 
 export function terminalPath(mode?: AuthMode): string {
   if (!mode || mode === 'login') return routes.terminalLogin
