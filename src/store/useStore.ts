@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { apiUrl } from '../lib/api';
+import { DEFAULT_INSTITUTIONS } from '../lib/defaultInstitutions';
 
 export interface Institution {
   id: string;
@@ -264,23 +265,32 @@ export const useStore = create<GripperState>((set, get) => {
         const res = await fetch(apiUrl('/institutions'));
         if (res.ok) {
           const data = await res.json();
-          set({ institutions: data });
+          // Keep sign-in usable while the API is starting or unavailable. The
+          // defaults mirror the backend seed data and are replaced whenever a
+          // valid institution response is available.
+          const institutions = Array.isArray(data) && data.length > 0
+            ? data
+            : DEFAULT_INSTITUTIONS;
+          set({ institutions });
           
           // Auto-select logged-in user's institution first, or default to first
           const user = get().currentUser;
           if (user) {
-            const userInst = data.find((i: Institution) => i.id === user.institution_id);
+            const userInst = institutions.find((i: Institution) => i.id === user.institution_id);
             if (userInst) {
               await get().setInstitution(userInst);
               return;
             }
           }
-          if (data.length > 0 && !get().currentInstitution) {
-            await get().setInstitution(data[0]);
+          if (institutions.length > 0 && !get().currentInstitution) {
+            await get().setInstitution(institutions[0]);
           }
+        } else {
+          set({ institutions: DEFAULT_INSTITUTIONS });
         }
       } catch (err) {
         console.error('Failed to fetch institutions', err);
+        set({ institutions: DEFAULT_INSTITUTIONS });
       } finally {
         set({ isLoading: false });
       }
