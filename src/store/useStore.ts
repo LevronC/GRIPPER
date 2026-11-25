@@ -45,7 +45,10 @@ export interface ResearchReport {
   sector: string;
   company: string;
   recommendation: string;
+  /** pending | processing | processed | failed | duplicate */
   status: string;
+  error_message?: string | null;
+  attempts?: number;
   created_at: string;
 }
 

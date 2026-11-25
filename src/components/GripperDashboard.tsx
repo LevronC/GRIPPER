@@ -136,6 +136,7 @@ export default function GripperDashboard() {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const searchLimit = 3;
   const [isSearching, setIsSearching] = useState(false);
+  const [searchDegraded, setSearchDegraded] = useState<string | null>(null);
 
   // Editable Holdings state (local copy for draft edits)
   const [holdingsDraft, setHoldingsDraft] = useState<Holding[]>([]);
@@ -202,14 +203,20 @@ export default function GripperDashboard() {
       const res = await fetch(apiUrl('/documents/upload'), {
         method: 'POST',
         headers: {
-          'X-Institution-ID': currentInstitution.id,
           'Authorization': `Bearer ${token || ''}`
         },
         body: formData
       });
 
       if (res.ok) {
-        setUploadStatus({ type: 'success', msg: 'Document uploaded successfully! Ingestion queued.' });
+        const data = await res.json();
+        if (data.status === 'failed') {
+          setUploadStatus({ type: 'error', msg: data.message || 'Ingestion failed. You can retry it from the document list.' });
+        } else if (data.status === 'pending') {
+          setUploadStatus({ type: 'success', msg: 'Document uploaded and queued for ingestion.' });
+        } else {
+          setUploadStatus({ type: 'success', msg: data.status === 'duplicate' ? 'This document was already ingested.' : 'Document uploaded and indexed.' });
+        }
         fetchDocuments(currentInstitution.id);
         setCompany('');
         setSelectedFile(null);
@@ -233,7 +240,6 @@ export default function GripperDashboard() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Institution-ID': currentInstitution.id,
           'Authorization': `Bearer ${token || ''}`
         },
         body: JSON.stringify({
@@ -245,6 +251,11 @@ export default function GripperDashboard() {
       if (res.ok) {
         const data = await res.json();
         setSearchResults(data.results || []);
+        setSearchDegraded(
+          data.retrieval_mode === 'full_text_only'
+            ? 'Semantic search is unavailable, so results come from keyword (full-text) matching only.'
+            : null,
+        );
       } else {
         console.error('Search failed');
       }
@@ -252,6 +263,18 @@ export default function GripperDashboard() {
       console.error(err);
     } finally {
       setIsSearching(false);
+    }
+  };
+
+  const handleRetryDocument = async (reportId: string) => {
+    if (!currentInstitution) return;
+    try {
+      await fetch(apiUrl(`/documents/${reportId}/retry`), {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token || ''}` },
+      });
+    } finally {
+      fetchDocuments(currentInstitution.id);
     }
   };
 
@@ -900,9 +923,23 @@ export default function GripperDashboard() {
                       <div className="space-y-1 min-w-0 flex-1">
                         <h4 className="text-xs font-black text-white truncate uppercase tracking-tight">{doc.company}</h4>
                         <span className="text-[8px] text-slate-600 font-black uppercase tracking-widest">{doc.sector} / {doc.recommendation}</span>
+                        {doc.error_message && (doc.status === 'failed' || doc.status === 'duplicate') && (
+                          <p className="text-[10px] text-slate-500 leading-snug">{doc.error_message}</p>
+                        )}
                       </div>
-                      <div className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border ${doc.status === 'processed' ? 'bg-cyan-500/5 text-cyan-400 border-cyan-500/20' : 'bg-amber-500/5 text-amber-400 border-amber-500/20'}`}>
-                        {doc.status === 'processed' ? 'Indexed' : 'Pending'}
+                      <div className="flex flex-col items-end gap-2 shrink-0">
+                        <div className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border ${
+                          doc.status === 'processed' ? 'bg-cyan-500/5 text-cyan-400 border-cyan-500/20'
+                            : doc.status === 'failed' ? 'bg-red-500/5 text-red-400 border-red-500/20'
+                              : 'bg-amber-500/5 text-amber-400 border-amber-500/20'}`}>
+                          {({ processed: 'Indexed', pending: 'Pending', processing: 'Processing', failed: 'Failed', duplicate: 'Duplicate' } as Record<string, string>)[doc.status] ?? doc.status}
+                        </div>
+                        {doc.status === 'failed' && (
+                          <button type="button" onClick={() => handleRetryDocument(doc.id)}
+                            className="text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-cyan-400">
+                            Retry
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -931,11 +968,16 @@ export default function GripperDashboard() {
               </div>
 
               <div className="space-y-6">
+                {searchDegraded && (
+                  <div role="status" className="p-4 rounded-2xl border border-amber-500/20 bg-amber-500/5 text-amber-300 text-xs font-medium">
+                    {searchDegraded}
+                  </div>
+                )}
                 <span className="text-[10px] font-black text-slate-600 uppercase tracking-[0.4em] block px-2">Retrieved Passages ({searchResults.length})</span>
                 {searchResults.length === 0 ? (
                   <div className="py-32 border-2 border-dashed border-white/5 rounded-[3rem] flex flex-col items-center justify-center text-slate-700 bg-white/[0.01]">
                     <Database size={48} className="opacity-20 mb-4" />
-                    <span className="text-xs font-black uppercase tracking-widest opacity-40">Store Offline</span>
+                    <span className="text-xs font-black uppercase tracking-widest opacity-40">No results</span>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 gap-6">
@@ -945,7 +987,7 @@ export default function GripperDashboard() {
                           <h4 className="text-sm font-black text-cyan-400 uppercase tracking-tight flex items-center gap-3">
                             <FileText size={16} /> {res.company} / {res.sector}
                           </h4>
-                          <span className="text-[10px] font-black font-mono text-slate-600 uppercase tracking-tighter">Match Prob: {(res.similarity * 100).toFixed(2)}% | Sector Access Node {res.page}</span>
+                          <span className="text-[10px] font-black font-mono text-slate-600 uppercase tracking-tighter">{res.page != null ? `Page ${res.page}` : 'Page n/a'}</span>
                         </div>
                         <p className="text-sm text-slate-400 leading-relaxed font-medium p-8 bg-white/[0.01] border border-white/5 rounded-[2rem] relative group-hover:text-slate-300 transition-colors">
                           <span className="absolute top-0 left-0 w-1 h-full bg-cyan-500/20" />
