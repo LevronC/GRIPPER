@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 os.environ.setdefault("SKIP_DB_BOOTSTRAP", "1")
 os.environ.setdefault("SEED_DEMO_USER", "false")
 os.environ.setdefault("ALLOW_HEADER_AUTH", "true")
-os.environ.setdefault("SECRET_KEY", "test-secret-key")
+os.environ.setdefault("SECRET_KEY", "test-secret-key-0123456789abcdef0123")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
 
 from app.main import app  # noqa: E402

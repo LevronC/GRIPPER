@@ -23,13 +23,9 @@ def _backend_dir() -> str:
 
 
 def _normalize_db_url(url: str) -> str:
-    """
-    Normalize database URLs for SQLAlchemy 2.0.
-    Vercel Postgres / Neon provides 'postgres://' but SQLAlchemy requires 'postgresql://'.
-    """
-    if url.startswith("postgres://"):
-        url = "postgresql://" + url[len("postgres://"):]
-    return url
+    from app.core.database_url import normalize_database_url
+
+    return normalize_database_url(url)
 
 
 def run_migrations() -> None:

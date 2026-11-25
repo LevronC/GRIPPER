@@ -9,13 +9,13 @@ import random
 import string
 from typing import Optional
 from datetime import datetime
-from jose import jwt
+import jwt
 
 import logging
 
 from app.db.migrate import ensure_database_ready
 from app.db.session import _engine_kwargs
-from app.core.database_url import database_url_error_hint
+from app.core.database_url import database_url_error_hint, normalize_database_url
 from app import models
 from app.core import security
 from app.core.config import settings
@@ -36,10 +36,7 @@ _super_session_factory = None
 
 
 def _normalize_url(url: str) -> str:
-    """SQLAlchemy 2.0 requires 'postgresql://' — Vercel Postgres gives 'postgres://'."""
-    if url.startswith("postgres://"):
-        return "postgresql://" + url[len("postgres://"):]
-    return url
+    return normalize_database_url(url)
 
 
 def get_superuser_session():

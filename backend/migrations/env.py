@@ -20,10 +20,10 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-from app.core.database_url import safe_encode_database_url
+from app.core.database_url import normalize_database_url
 
 # Set DB URL dynamically from env if available
-db_url = safe_encode_database_url(
+db_url = normalize_database_url(
     os.getenv("SUPERUSER_DATABASE_URL")
     or os.getenv(
         "DATABASE_URL",

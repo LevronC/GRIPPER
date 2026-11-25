@@ -30,6 +30,27 @@ def safe_encode_database_url(url: str) -> str:
     return res
 
 
+_DRIVER = "postgresql+psycopg2://"
+
+
+def normalize_database_url(url: str) -> str:
+    """
+    Returns a SQLAlchemy URL that always names the psycopg2 driver explicitly.
+
+    SQLAlchemy 2.1 changed the default driver for bare ``postgresql://`` URLs from
+    psycopg2 to psycopg (v3). Naming the driver keeps behaviour independent of the
+    installed SQLAlchemy version. Also accepts the ``postgres://`` scheme used by
+    some hosting providers and URL-encodes special characters in the password.
+    """
+    if not url:
+        return url
+    if url.startswith("postgres://"):
+        url = "postgresql://" + url[len("postgres://"):]
+    if url.startswith("postgresql://"):
+        url = _DRIVER + url[len("postgresql://"):]
+    return safe_encode_database_url(url)
+
+
 def database_url_error_hint(url: str, exc: Exception | None = None) -> str:
     host = ""
     try:
