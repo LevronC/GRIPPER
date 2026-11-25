@@ -1,0 +1,308 @@
+"""Ingestion lifecycle and degraded retrieval (real DB, restricted role)."""
+
+from __future__ import annotations
+
+import os
+import uuid
+
+import fitz
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import text
+
+from app.db.session import SessionLocal, set_tenant
+from app.services.embeddings import generator as gen
+from app.services.embeddings.generator import EmbeddingUnavailable
+from app.services.ingestion.pipeline import ingest_document
+from app.services.retrieval.searcher import hybrid_search
+
+pytestmark = pytest.mark.integration
+
+BODY = ("Synthetic research note. The semiconductor supplier reported elevated inventory and "
+        "weaker gross margin guidance; liquidity remains adequate. ") * 40
+
+
+@pytest.fixture
+def api():
+    from app.main import app
+    return TestClient(app)
+
+
+def _pdf(path, body: str = BODY, pages: int = 2) -> str:
+    doc = fitz.open()
+    for i in range(pages):
+        page = doc.new_page()
+        page.insert_textbox(fitz.Rect(36, 36, 560, 800), f"Page {i + 1}. {body}" if body else "", fontsize=8)
+    doc.save(str(path))
+    doc.close()
+    return str(path)
+
+
+def _report(owner_engine, institution_id, file_path, status="pending") -> uuid.UUID:
+    rid = uuid.uuid4()
+    with owner_engine.begin() as conn:
+        conn.execute(
+            text("INSERT INTO research_reports (id, institution_id, sector, company, recommendation, status, "
+                 "file_path, created_at) VALUES (:r, :i, 'Technology', 'Synthetic Semi', 'hold', :s, :f, now())"),
+            {"r": rid, "i": institution_id, "s": status, "f": file_path},
+        )
+    return rid
+
+
+def _state(owner_engine, rid):
+    with owner_engine.connect() as conn:
+        r = conn.execute(text("SELECT status, attempts, error_message, file_path, processed_at FROM research_reports WHERE id = :r"),
+                         {"r": rid}).mappings().one()
+        n = conn.execute(text("SELECT count(*) FROM document_chunks WHERE report_id = :r"), {"r": rid}).scalar()
+        models = set(conn.execute(text("SELECT embedding_model FROM document_chunks WHERE report_id = :r"), {"r": rid}).scalars())
+    return dict(r), n, models
+
+
+def _ingest(rid, file_ref, institution_id):
+    with SessionLocal() as db:
+        set_tenant(db, institution_id)
+        return ingest_document(db, rid, file_ref, institution_id)
+
+
+def test_successful_ingestion_records_provenance_and_deletes_source(owner_engine, two_tenants, tmp_path):
+    a = two_tenants.a
+    path = _pdf(tmp_path / "ok.pdf")
+    rid = _report(owner_engine, a.institution_id, path)
+    n = _ingest(rid, path, a.institution_id)
+    state, chunks, models = _state(owner_engine, rid)
+    assert n == chunks >= 2
+    assert state["status"] == "processed" and state["attempts"] == 1 and state["processed_at"] is not None
+    assert models == {"hash-test-v1@384"}
+    assert state["file_path"] is None and not os.path.exists(path)  # deleted only after commit
+    with owner_engine.connect() as conn:
+        pages = set(conn.execute(text("SELECT metadata_json->>'page' FROM document_chunks WHERE report_id = :r"), {"r": rid}).scalars())
+    assert pages == {"1", "2"}
+
+
+def test_failed_ingestion_keeps_source_and_is_visible(owner_engine, two_tenants, tmp_path):
+    a = two_tenants.a
+    bad = tmp_path / "bad.pdf"
+    bad.write_bytes(b"%PDF-1.4 this is not really a pdf")
+    rid = _report(owner_engine, a.institution_id, str(bad))
+    with pytest.raises(Exception):
+        _ingest(rid, str(bad), a.institution_id)
+    state, chunks, _ = _state(owner_engine, rid)
+    assert state["status"] == "failed" and chunks == 0
+    assert state["error_message"] == "The file could not be parsed as a PDF."
+    assert state["file_path"] == str(bad) and bad.exists()  # input preserved for retry
+
+
+def test_retry_after_fix_succeeds_without_duplicate_chunks(api, owner_engine, two_tenants, tmp_path, monkeypatch):
+    monkeypatch.setenv("INGESTION_MODE", "sync")
+    a = two_tenants.a
+    path = tmp_path / "retry.pdf"
+    path.write_bytes(b"%PDF-1.4 broken")
+    rid = _report(owner_engine, a.institution_id, str(path))
+    with pytest.raises(Exception):
+        _ingest(rid, str(path), a.institution_id)
+    _pdf(path)  # operator replaces the file; source was retained
+    r = api.post(f"/documents/{rid}/retry", headers=a.auth("analyst"))
+    assert r.status_code == 202, r.text
+    assert r.json()["status"] == "processed"
+    state, chunks, _ = _state(owner_engine, rid)
+    assert state["attempts"] == 2 and chunks >= 2
+    # Re-running a completed job is a no-op, not a duplicate.
+    assert _ingest(rid, str(path), a.institution_id) == chunks
+    assert _state(owner_engine, rid)[1] == chunks
+
+
+def test_reprocessing_replaces_chunks(owner_engine, two_tenants, tmp_path):
+    a = two_tenants.a
+    path = _pdf(tmp_path / "again.pdf")
+    keep = tmp_path / "again-copy.pdf"
+    keep.write_bytes(open(path, "rb").read())
+    rid = _report(owner_engine, a.institution_id, path)
+    n1 = _ingest(rid, path, a.institution_id)
+    with owner_engine.begin() as conn:  # simulate a crashed run that must be redone
+        conn.execute(text("UPDATE research_reports SET status = 'failed', file_path = :f WHERE id = :r"), {"f": str(keep), "r": rid})
+    n2 = _ingest(rid, str(keep), a.institution_id)
+    assert n1 == n2 == _state(owner_engine, rid)[1]
+
+
+def test_retry_rules(api, owner_engine, two_tenants, tmp_path):
+    a, b = two_tenants.a, two_tenants.b
+    assert api.post(f"/documents/{a.report_id}/retry", headers=a.auth("analyst")).status_code == 409  # processed
+    gone = _report(owner_engine, a.institution_id, None, status="failed")
+    assert api.post(f"/documents/{gone}/retry", headers=a.auth("analyst")).status_code == 410
+    other = _report(owner_engine, b.institution_id, str(tmp_path / "x.pdf"), status="failed")
+    assert api.post(f"/documents/{other}/retry", headers=a.auth("analyst")).status_code == 404
+    assert api.post(f"/documents/{gone}/retry", headers=a.auth("faculty")).status_code == 403
+
+
+def test_empty_pdf_fails_with_clear_reason(owner_engine, two_tenants, tmp_path):
+    a = two_tenants.a
+    path = str(tmp_path / "empty.pdf")
+    doc = fitz.open()
+    doc.new_page()
+    doc.save(path)
+    doc.close()
+    rid = _report(owner_engine, a.institution_id, path)
+    with pytest.raises(Exception):
+        _ingest(rid, path, a.institution_id)
+    state, _, _ = _state(owner_engine, rid)
+    assert state["status"] == "failed" and "No extractable text" in state["error_message"]
+
+
+def test_duplicate_content_marked_duplicate(owner_engine, two_tenants, tmp_path):
+    a = two_tenants.a
+    first = _pdf(tmp_path / "d1.pdf")
+    second = tmp_path / "d2.pdf"
+    second.write_bytes(open(first, "rb").read())
+    r1 = _report(owner_engine, a.institution_id, first)
+    _ingest(r1, first, a.institution_id)
+    r2 = _report(owner_engine, a.institution_id, str(second))
+    assert _ingest(r2, str(second), a.institution_id) == 0
+    state, chunks, _ = _state(owner_engine, r2)
+    assert state["status"] == "duplicate" and chunks == 0 and str(r1) in state["error_message"]
+
+
+def test_provider_failure_stores_chunks_without_vectors_and_search_degrades(owner_engine, two_tenants, tmp_path, monkeypatch):
+    a = two_tenants.a
+
+    def down(*_a, **_k):
+        raise EmbeddingUnavailable("provider down")
+
+    monkeypatch.setattr(gen, "_embed", down)
+    path = _pdf(tmp_path / "novec.pdf")
+    rid = _report(owner_engine, a.institution_id, path)
+    n = _ingest(rid, path, a.institution_id)
+    state, chunks, models = _state(owner_engine, rid)
+    assert state["status"] == "processed" and n == chunks and models == {None}
+    with owner_engine.connect() as conn:
+        assert conn.execute(text("SELECT count(*) FROM document_chunks WHERE report_id = :r AND embedding IS NOT NULL"),
+                            {"r": rid}).scalar() == 0  # no substitute vectors
+
+    with SessionLocal() as db:
+        set_tenant(db, a.institution_id)
+        out = hybrid_search(db, "semiconductor inventory gross margin", a.institution_id, limit=5)
+    assert out.retrieval_mode == "full_text_only" and "provider down" in out.degraded_reason
+    assert any(r["report_id"] == str(rid) for r in out.results)  # FTS still finds it
+
+
+def test_vector_leg_ignores_other_embedding_spaces(owner_engine, two_tenants):
+    a = two_tenants.a
+    with owner_engine.begin() as conn:
+        conn.execute(text("UPDATE document_chunks SET embedding_model = 'legacy-unknown' WHERE id = :c"), {"c": a.chunk_id})
+    query = "zzunrelatedqueryterm"  # no FTS match, so only the vector leg could return anything
+    with SessionLocal() as db:
+        set_tenant(db, a.institution_id)
+        assert hybrid_search(db, query, a.institution_id).legs["vector"] == 0
+    with owner_engine.begin() as conn:
+        conn.execute(text("UPDATE document_chunks SET embedding_model = 'hash-test-v1@384' WHERE id = :c"), {"c": a.chunk_id})
+    with SessionLocal() as db:
+        set_tenant(db, a.institution_id)
+        assert hybrid_search(db, query, a.institution_id).legs["vector"] == 1
+
+
+def test_search_api_reports_mode(api, two_tenants, monkeypatch):
+    a = two_tenants.a
+    body = api.post("/search/semantic", json={"query": "semiconductor liquidity", "limit": 3}, headers=a.auth("analyst")).json()
+    assert body["retrieval_mode"] == "hybrid" and body["degraded_reason"] is None
+    monkeypatch.setenv("EMBEDDING_PROVIDER", "none")
+    body = api.post("/search/semantic", json={"query": "semiconductor liquidity", "limit": 3}, headers=a.auth("analyst")).json()
+    assert body["retrieval_mode"] == "full_text_only" and body["degraded_reason"]
+    assert any(r["chunk_id"] == str(a.chunk_id) for r in body["results"])
+
+
+def test_health_reports_capabilities(api, monkeypatch):
+    caps = api.get("/health").json()["capabilities"]
+    assert caps["semantic_search"] is True and caps["embedding"]["provider"] == "hash_test"
+    monkeypatch.setenv("EMBEDDING_PROVIDER", "none")
+    caps = api.get("/health").json()["capabilities"]
+    assert caps == {**caps, "semantic_search": False, "retrieval_mode": "full_text_only", "embedding": None}
+    assert "HF_API_KEY" not in str(caps)
+
+
+def test_upload_endpoint_end_to_end(api, owner_engine, two_tenants, tmp_path, monkeypatch):
+    a = two_tenants.a
+    monkeypatch.setenv("INGESTION_MODE", "sync")
+    monkeypatch.setattr("app.core.config.settings.UPLOAD_DIR", str(tmp_path))
+    pdf = _pdf(tmp_path / "upload-src.pdf")
+    with open(pdf, "rb") as fh:
+        r = api.post("/documents/upload", headers=a.auth("analyst"),
+                     data={"sector": "Technology", "company": "Synthetic Semi", "recommendation": "hold"},
+                     files={"file": ("note.pdf", fh, "application/pdf")})
+    assert r.status_code == 202, r.text
+    assert r.json()["status"] == "processed" and r.json()["chunks"] >= 2
+    listed = api.get("/documents", headers=a.auth("analyst")).json()["results"]
+    assert any(d["id"] == r.json()["report_id"] and d["status"] == "processed" for d in listed)
+
+    with open(pdf, "rb") as fh:
+        denied = api.post("/documents/upload", headers=a.auth("faculty"),
+                          data={"sector": "Technology", "company": "X", "recommendation": "hold"},
+                          files={"file": ("note.pdf", fh, "application/pdf")})
+    assert denied.status_code == 403
+
+
+def test_upload_failure_is_reported_not_hidden(api, owner_engine, two_tenants, tmp_path, monkeypatch):
+    a = two_tenants.a
+    monkeypatch.setenv("INGESTION_MODE", "sync")
+    monkeypatch.setattr("app.core.config.settings.UPLOAD_DIR", str(tmp_path))
+    r = api.post("/documents/upload", headers=a.auth("analyst"),
+                 data={"sector": "Technology", "company": "Broken", "recommendation": "sell"},
+                 files={"file": ("bad.pdf", b"%PDF-1.4 garbage", "application/pdf")})
+    assert r.status_code == 202
+    assert r.json()["status"] == "failed" and "parsed" in r.json()["message"]
+    listed = {d["id"]: d for d in api.get("/documents", headers=a.auth("analyst")).json()["results"]}
+    doc = listed[r.json()["report_id"]]
+    assert doc["status"] == "failed" and doc["error_message"] and "Traceback" not in doc["error_message"]
+
+
+def test_stale_processing_job_is_picked_up(owner_engine, runtime_engine, two_tenants, tmp_path):
+    a = two_tenants.a
+    rid = _report(owner_engine, a.institution_id, str(tmp_path / "stale.pdf"), status="processing")
+    with owner_engine.begin() as conn:
+        conn.execute(text("UPDATE research_reports SET processing_started_at = TIMEZONE('utc', NOW()) - INTERVAL '1 hour' WHERE id = :r"), {"r": rid})
+    with runtime_engine.connect() as conn:
+        ids = set(conn.execute(text("SELECT report_id FROM app_pending_ingestion_jobs(50)")).scalars())
+    assert rid in ids
+
+
+def test_auto_mode_never_queues_on_vercel_without_declared_worker(monkeypatch):
+    from app.api.endpoints import ingestion_mode
+
+    monkeypatch.setenv("INGESTION_MODE", "auto")
+    monkeypatch.setenv("VERCEL", "1")
+    monkeypatch.delenv("INGESTION_WORKER", raising=False)
+    assert ingestion_mode() == "sync"
+    monkeypatch.setenv("INGESTION_WORKER", "external")
+    assert ingestion_mode() in ("queue", "sync")  # queue iff Redis reachable
+
+
+def test_queue_mode_with_real_rq_worker(api, owner_engine, two_tenants, tmp_path, monkeypatch):
+    """Upload enqueues to real Redis; an RQ worker (burst mode) processes it under the tenant."""
+    from rq import SimpleWorker
+
+    from app.api import endpoints
+    from app.core.redis_client import get_redis_client
+
+    redis = get_redis_client()
+    if redis is None:
+        if os.getenv("REQUIRE_INTEGRATION") == "1":
+            pytest.fail("Redis required for the queue-mode test")
+        pytest.skip("Redis unavailable")
+    a = two_tenants.a
+    monkeypatch.setenv("INGESTION_MODE", "queue")
+    monkeypatch.setattr("app.core.config.settings.UPLOAD_DIR", str(tmp_path))
+    queue = endpoints.get_task_queue()
+    queue.empty()
+    with open(_pdf(tmp_path / "queued-src.pdf"), "rb") as fh:
+        r = api.post("/documents/upload", headers=a.auth("analyst"),
+                     data={"sector": "Energy", "company": "Queued Co", "recommendation": "buy"},
+                     files={"file": ("q.pdf", fh, "application/pdf")})
+    assert r.status_code == 202 and r.json()["status"] == "pending"
+    rid = uuid.UUID(r.json()["report_id"])
+    assert _state(owner_engine, rid)[0]["status"] == "pending"
+
+    SimpleWorker([queue], connection=redis).work(burst=True)
+
+    state, chunks, models = _state(owner_engine, rid)
+    assert state["status"] == "processed" and chunks >= 2 and models == {"hash-test-v1@384"}
+    with owner_engine.connect() as conn:
+        tenants = set(conn.execute(text("SELECT institution_id FROM document_chunks WHERE report_id = :r"), {"r": rid}).scalars())
+    assert tenants == {a.institution_id}

@@ -27,6 +27,7 @@ from sqlalchemy import create_engine, text
 
 from app.core.database_url import normalize_database_url
 from app.core.security import create_access_token
+from app.services.embeddings.generator import _hash_embed
 
 pytestmark = pytest.mark.integration
 
@@ -154,16 +155,18 @@ def _seed_tenant(conn, label: str, marker_ticker: str, roles: tuple[str, ...]) -
         ),
         {"r": t.report_id, "i": t.institution_id, "c": f"{label.upper()} Corp"},
     )
-    # Overlapping vocabulary across tenants so FTS would match both without isolation.
+    # Overlapping vocabulary across tenants so FTS and vector search would match both without isolation.
+    content = f"Semiconductor liquidity risk memo for {label} confidential thesis {marker_ticker}"
     conn.execute(
         text(
-            "INSERT INTO document_chunks (id, institution_id, report_id, content, embedding, metadata_json, created_at) "
-            "VALUES (:c, :i, :r, :content, CAST(:emb AS vector), CAST(:meta AS json), now())"
+            "INSERT INTO document_chunks (id, institution_id, report_id, content, embedding, embedding_model, "
+            "embedding_provider, metadata_json, created_at) "
+            "VALUES (:c, :i, :r, :content, CAST(:emb AS vector), 'hash-test-v1@384', 'hash_test', CAST(:meta AS json), now())"
         ),
         {
             "c": t.chunk_id, "i": t.institution_id, "r": t.report_id,
-            "content": f"Semiconductor liquidity risk memo for {label} confidential thesis {marker_ticker}",
-            "emb": _vec_literal(fake_vector(label)), "meta": '{"page": 1}',
+            "content": content,
+            "emb": _vec_literal(_hash_embed(content)), "meta": '{"page": 1}',
         },
     )
     conn.execute(

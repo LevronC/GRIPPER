@@ -114,7 +114,26 @@ def root():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "service": "gripper-backend"}
+    """
+    Liveness plus non-sensitive capability flags, so clients can show when a feature
+    is degraded (e.g. semantic search off, email delivery not configured).
+    """
+    from app.api.endpoints import ingestion_mode
+    from app.core.email import email_delivery_available
+    from app.services.embeddings.generator import active_space
+
+    space = active_space()
+    return {
+        "status": "healthy",
+        "service": "gripper-backend",
+        "capabilities": {
+            "semantic_search": space is not None,
+            "retrieval_mode": "hybrid" if space else "full_text_only",
+            "embedding": space.public() if space else None,
+            "ingestion_mode": ingestion_mode(),
+            "email_delivery": email_delivery_available(),
+        },
+    }
 
 
 @app.get("/health/db")

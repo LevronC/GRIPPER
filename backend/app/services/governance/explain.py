@@ -20,7 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import GovernanceEvent
-from app.services.retrieval.searcher import search_documents
+from app.services.retrieval.searcher import hybrid_search
 
 logger = logging.getLogger(__name__)
 
@@ -77,8 +77,11 @@ def generate_violation_explanation(
 
     evidence: List[Dict[str, Any]] = []
     research_status = "none"
+    retrieval_mode = None
     try:
-        for chunk in search_documents(db, query, institution_id, limit=EVIDENCE_LIMIT):
+        outcome = hybrid_search(db, query, institution_id, limit=EVIDENCE_LIMIT)
+        retrieval_mode = outcome.retrieval_mode
+        for chunk in outcome.results:
             evidence.append({
                 "chunk_id": chunk["chunk_id"],
                 "report_id": chunk["report_id"],
@@ -124,5 +127,6 @@ def generate_violation_explanation(
         "explanation": " ".join(lines),
         "explanation_source": "template",
         "search_query": query,
+        "retrieval_mode": retrieval_mode,
         "evidence": evidence,
     }

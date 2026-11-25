@@ -17,6 +17,9 @@ from fastapi.testclient import TestClient
 os.environ.setdefault("ENVIRONMENT", "test")
 os.environ.setdefault("SECRET_KEY", "test-secret-key-0123456789abcdef0123")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
+# Deterministic, clearly non-semantic vectors in their own embedding space (see
+# app/services/embeddings/generator.py). Tests that exercise real models opt in.
+os.environ.setdefault("EMBEDDING_PROVIDER", "hash_test")
 
 from app.main import app  # noqa: E402
 from app import models  # noqa: E402

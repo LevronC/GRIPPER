@@ -1,65 +1,48 @@
-import time
 import json
 import logging
+import time
+from datetime import datetime, timezone
 from functools import wraps
-from datetime import datetime
-from typing import Callable, Any
+from typing import Any, Callable, Optional
 
 logger = logging.getLogger("gripper_observability")
 
-# Configure logger to only output JSON or custom logs
 logging.basicConfig(level=logging.INFO)
+
 
 def log_json_metric(
     operation: str,
     duration_ms: float,
     status: str,
-    error_message: str = None,
-    metadata: dict = None
+    error_type: Optional[str] = None,
 ) -> None:
-    """
-    Emits a structured JSON log containing telemetry metrics.
-    """
-    log_data = {
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+    """Structured timing log. Records only the operation, duration, status and error class."""
+    logger.info(json.dumps({
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "operation": operation,
         "duration_ms": round(duration_ms, 2),
         "status": status,
-        "error_message": error_message,
-        "metadata": metadata or {}
-    }
-    # Log via standard logging system
-    logger.info(json.dumps(log_data))
-    # Print to console for immediate visibility during tests
-    print(f"📊 [OBSERVABILITY] {json.dumps(log_data)}")
+        "error_type": error_type,
+    }))
+
 
 def observe_time(operation_name: str) -> Callable:
     """
-    A Python decorator to measure and log function execution latency as structured JSON.
+    Measures latency with a monotonic clock and logs it. Deliberately does NOT log
+    arguments or exception messages: those can contain search queries, document text or
+    portfolio data (the previous version printed keyword arguments to stdout).
     """
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
-            start_time = time.perf_counter()
-            status = "success"
-            error_message = None
+            start = time.perf_counter()
+            status, error_type = "success", None
             try:
                 return func(*args, **kwargs)
             except Exception as e:
-                status = "error"
-                error_message = str(e)
+                status, error_type = "error", type(e).__name__
                 raise
             finally:
-                end_time = time.perf_counter()
-                duration_ms = (end_time - start_time) * 1000.0
-                
-                # Dynamic metadata extraction based on method context
-                metadata = {}
-                if kwargs:
-                    # Mask sensitive information, serialize basic values
-                    for k, v in kwargs.items():
-                        if isinstance(v, (str, int, float, bool)):
-                            metadata[k] = v
-                log_json_metric(operation_name, duration_ms, status, error_message, metadata)
+                log_json_metric(operation_name, (time.perf_counter() - start) * 1000.0, status, error_type)
         return wrapper
     return decorator

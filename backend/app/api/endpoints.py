@@ -20,12 +20,12 @@ from app.core.errors import internal_error
 from app.db.session import SessionLocal, get_db, set_tenant
 from app import models
 from app.schemas.document import SemanticSearchRequest
-from app.services.retrieval.searcher import search_documents
+from app.services.retrieval.searcher import hybrid_search
 from app.services.governance.evaluator import evaluate_portfolio_compliance, simulate_portfolio_compliance
 from app.services.governance.explain import generate_violation_explanation
 from app.services.governance.holdings import validate_holdings_set
 from app.api.deps import CurrentUser, RoleChecker
-from app.api.tenancy import require_governance_event, require_portfolio
+from app.api.tenancy import require_governance_event, require_portfolio, require_report
 from app.core.rbac import COMPLIANCE_ROLES, READ_ROLES, RESEARCH_ROLES, SIMULATION_ROLES
 
 logger = logging.getLogger(__name__)
@@ -130,48 +130,70 @@ def upload_document(
     db.add(report)
     db.commit()
 
-    # ── Background processing ─────────────────────────────────────────────────
-    # Priority order:
-    #   1. RQ via Redis — async, instant (local dev / VM)
-    #   2. Synchronous in-request — when Redis is unavailable and we're on
-    #      Vercel (no persistent worker process). Fits within the 60s timeout
-    #      for typical research reports (10-50 pages + HF API embedding).
-    task_queue = get_task_queue()
-    if task_queue:
-        try:
-            from app.workers.tasks import process_document_ingestion
-            task_queue.enqueue(
-                process_document_ingestion,
-                str(report_id),
-                file_ref,
-                str(institution_id),
-            )
-            return {
-                "report_id": str(report_id),
-                "status": "pending",
-                "message": "Document enqueued for async ingestion.",
-            }
-        except Exception as e:
-            logger.warning("Could not enqueue ingestion job, falling back to sync: %s", e)
+    return _dispatch_ingestion(db, report_id, file_ref, institution_id)
 
-    # Synchronous fallback — run ingestion inside this request
+
+def ingestion_mode() -> str:
+    """
+    queue: enqueue to Redis for an RQ worker. sync: process inside the request.
+    INGESTION_MODE=auto (default) uses the queue only when Redis is reachable AND a worker
+    can exist: never on Vercel unless INGESTION_WORKER=external declares one.
+    """
+    requested = os.getenv("INGESTION_MODE", "auto").strip().lower()
+    if requested in ("queue", "sync"):
+        return requested
+    on_vercel = os.getenv("VERCEL") == "1"
+    worker_declared = os.getenv("INGESTION_WORKER", "").strip().lower() == "external"
+    if on_vercel and not worker_declared:
+        return "sync"
+    return "queue" if get_task_queue() else "sync"
+
+
+def _dispatch_ingestion(db: Session, report_id: uuid.UUID, file_ref: str, institution_id: uuid.UUID) -> dict:
+    if ingestion_mode() == "queue":
+        task_queue = get_task_queue()
+        if task_queue:
+            try:
+                from app.workers.tasks import process_document_ingestion
+                task_queue.enqueue(process_document_ingestion, str(report_id), file_ref, str(institution_id))
+                return {"report_id": str(report_id), "status": "pending", "message": "Document queued for ingestion."}
+            except Exception as e:
+                logger.warning("Could not enqueue ingestion job, processing synchronously (%s)", type(e).__name__)
+
     from app.services.ingestion.pipeline import ingest_document as _ingest
-    logger.info("Processing document %s synchronously (no Redis queue)", report_id)
     try:
-        chunks = _ingest(db, report_id, file_ref, institution_id)  # tenant re-applied per transaction
-        return {
-            "report_id": str(report_id),
-            "status": "processed",
-            "chunks": chunks,
-            "message": "Document ingested.",
-        }
-    except Exception as e:
-        logger.error("Synchronous ingestion failed for report %s: %s", report_id, type(e).__name__)
+        chunks = _ingest(db, report_id, file_ref, institution_id)
+    except Exception:
+        report = db.get(models.ResearchReport, report_id)
         return {
             "report_id": str(report_id),
             "status": "failed",
-            "message": "Ingestion failed. The document is marked as failed.",
+            "message": (report.error_message if report else None) or "Ingestion failed.",
         }
+    report = db.get(models.ResearchReport, report_id)
+    return {
+        "report_id": str(report_id),
+        "status": report.status if report else "processed",
+        "chunks": chunks,
+        "message": "Document ingested.",
+    }
+
+
+@router.post("/documents/{report_id}/retry", status_code=202)
+def retry_document(
+    report_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(RoleChecker(RESEARCH_ROLES)),
+):
+    """Retries a failed ingestion. The source file is retained after failures for this purpose."""
+    report = require_report(db, report_id, current_user.institution_id)
+    if report.status != "failed":
+        raise HTTPException(status_code=409, detail=f"Only failed documents can be retried (status: {report.status}).")
+    if not report.file_path:
+        raise HTTPException(status_code=410, detail="The source file is no longer retained; upload it again.")
+    report.status = "pending"
+    db.commit()
+    return _dispatch_ingestion(db, report.id, report.file_path, current_user.institution_id)
 
 
 # ── Document listing ───────────────────────────────────────────────────────────
@@ -196,6 +218,8 @@ def list_documents(
         models.ResearchReport.company,
         models.ResearchReport.recommendation,
         models.ResearchReport.status,
+        models.ResearchReport.error_message,
+        models.ResearchReport.attempts,
         models.ResearchReport.created_at,
     ]
     try:
@@ -223,6 +247,8 @@ def list_documents(
                 "company": r.company,
                 "recommendation": r.recommendation,
                 "status": r.status,
+                "error_message": r.error_message,
+                "attempts": r.attempts,
                 "created_at": r.created_at.isoformat(),
             }
             for r in rows
@@ -239,8 +265,13 @@ def semantic_search(
     current_user: CurrentUser = Depends(RoleChecker(RESEARCH_ROLES)),
 ):
     try:
-        results = search_documents(db, request.query, current_user.institution_id, request.limit)
-        return {"query": request.query, "results": results}
+        outcome = hybrid_search(db, request.query, current_user.institution_id, request.limit)
+        return {
+            "query": request.query,
+            "results": outcome.results,
+            "retrieval_mode": outcome.retrieval_mode,
+            "degraded_reason": outcome.degraded_reason,
+        }
     except Exception as e:
         raise HTTPException(status_code=500, **internal_error(e, "semantic_search"))
 

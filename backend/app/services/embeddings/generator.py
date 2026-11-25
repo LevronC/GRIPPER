@@ -1,194 +1,201 @@
 """
-Embedding generation with two execution paths:
+Embedding generation with explicit providers and NO silent fallback.
 
-1. LOCAL (default, local dev / Railway):
-   Uses sentence-transformers with BAAI/bge-small-en-v1.5 loaded in-process.
-   Produces high-quality 384-dim embeddings. Requires ~130MB model download on
-   first run.
+EMBEDDING_PROVIDER:
+  auto (default) — hf_api if HF_API_KEY is set; else local if sentence-transformers is
+                   installed and not on Vercel; else none.
+  local          — sentence-transformers, in-process (BAAI/bge-small-en-v1.5, 384-d).
+  hf_api         — Hugging Face Inference (router.huggingface.co, hf-inference provider).
+  none           — semantic embeddings disabled; retrieval is full-text only.
+  hash_test      — deterministic token-hash vectors with NO semantic meaning. Allowed only
+                   when ENVIRONMENT=test, and stored under their own embedding space so
+                   they can never be compared with real embeddings.
 
-2. VERCEL / API path (when HF_API_KEY is set):
-   Calls the HuggingFace Inference API for BAAI/bge-small-en-v1.5.
-   No local model download, compatible with Vercel serverless function limits.
-   Free tier: 1000 req/day per model. Set HF_API_KEY in environment.
+Every stored vector records the embedding *space* that produced it
+(`document_chunks.embedding_model`, e.g. "BAAI/bge-small-en-v1.5@384"). Vector search
+only compares a query against chunks from the active space. When the provider is
+unavailable or fails, callers receive EmbeddingUnavailable and must degrade to
+full-text search; no substitute vectors are ever generated.
 
-3. FALLBACK (Vercel, no HF_API_KEY):
-   Deterministic SHA-256 based hash embedding. Semantically meaningless —
-   semantic search will not work. Only acceptable for CI / smoke tests.
-   A warning is logged whenever this path activates.
+Switching models: chunks from the old space are excluded from vector search until
+re-embedded with `scripts/reembed.py` (dry-run by default).
 """
 
+from __future__ import annotations
+
 import hashlib
+import importlib.util
 import json
 import logging
 import math
 import os
-import urllib.request
 import urllib.error
-from typing import Any, List
+import urllib.request
+from dataclasses import dataclass
+from typing import Any, List, Optional
 
 from app.core.config import settings
 from app.core.observability import observe_time
 
 logger = logging.getLogger(__name__)
 
+EMBEDDING_DIM = 384  # document_chunks.embedding is vector(384)
+BGE_QUERY_PREFIX = "Represent this sentence for searching relevant passages: "
+HF_ROUTER_URL = "https://router.huggingface.co/hf-inference/models/{model}/pipeline/feature-extraction"
+HF_BATCH = 32
+TIMEOUT_SECONDS = 30
+
+
+class EmbeddingUnavailable(Exception):
+    """The configured provider cannot produce embeddings right now (or none is configured)."""
+
+
+@dataclass(frozen=True)
+class EmbeddingSpace:
+    provider: str  # local | hf_api | hash_test
+    model: str
+    dimension: int
+
+    @property
+    def space_id(self) -> str:
+        # local and hf_api serve the same model weights with the same pooling and
+        # normalisation, so they share a space. hash_test never matches a real model.
+        return f"{self.model}@{self.dimension}"
+
+    def public(self) -> dict:
+        return {"provider": self.provider, "model": self.model, "dimension": self.dimension}
+
+
 _local_model = None
-_ON_VERCEL = os.getenv("VERCEL") == "1"
-
-# HuggingFace Inference API endpoint for the BGE small model
-_HF_API_URL = (
-    "https://api-inference.huggingface.co/pipeline/feature-extraction/"
-    "BAAI/bge-small-en-v1.5"
-)
 
 
-# ── Local model ────────────────────────────────────────────────────────────────
+def _on_vercel() -> bool:
+    return os.getenv("VERCEL") == "1"
 
-def _get_local_model() -> Any:
-    """Lazy-loads the BGE model. Raises on Vercel — use API path instead."""
+
+def _requested_provider() -> str:
+    return os.getenv("EMBEDDING_PROVIDER", "auto").strip().lower()
+
+
+def active_space() -> Optional[EmbeddingSpace]:
+    """The embedding space that would be used now, or None when semantic search is off."""
+    provider = _requested_provider()
+    if provider == "auto":
+        if settings.HF_API_KEY:
+            provider = "hf_api"
+        elif not _on_vercel() and importlib.util.find_spec("sentence_transformers") is not None:
+            provider = "local"
+        else:
+            provider = "none"
+    if provider == "none":
+        return None
+    if provider == "hash_test":
+        if settings.ENVIRONMENT != "test":
+            logger.error("EMBEDDING_PROVIDER=hash_test is only allowed when ENVIRONMENT=test")
+            return None
+        return EmbeddingSpace("hash_test", "hash-test-v1", EMBEDDING_DIM)
+    if provider == "hf_api":
+        if not settings.HF_API_KEY:
+            logger.error("EMBEDDING_PROVIDER=hf_api but HF_API_KEY is not set")
+            return None
+        return EmbeddingSpace("hf_api", settings.EMBEDDING_MODEL_NAME, EMBEDDING_DIM)
+    if provider == "local":
+        if _on_vercel():
+            logger.error("EMBEDDING_PROVIDER=local is not supported on Vercel")
+            return None
+        return EmbeddingSpace("local", settings.EMBEDDING_MODEL_NAME, EMBEDDING_DIM)
+    logger.error("Unknown EMBEDDING_PROVIDER=%r; semantic search disabled", provider)
+    return None
+
+
+# ── Providers ──────────────────────────────────────────────────────────────────
+
+def _normalize(vec: List[float]) -> List[float]:
+    norm = math.sqrt(sum(v * v for v in vec))
+    if norm == 0:
+        raise EmbeddingUnavailable("provider returned a zero vector")
+    return [v / norm for v in vec]
+
+
+def _local_embed(texts: List[str]) -> List[List[float]]:
     global _local_model
-    if _ON_VERCEL:
-        raise ModuleNotFoundError(
-            "sentence-transformers is intentionally not loaded on Vercel. "
-            "Set HF_API_KEY to use the HuggingFace Inference API."
-        )
-    if _local_model is None:
-        from sentence_transformers import SentenceTransformer
-        _local_model = SentenceTransformer(settings.EMBEDDING_MODEL_NAME, device="cpu")
-    return _local_model
-
-
-# ── HuggingFace Inference API ─────────────────────────────────────────────────
-
-def _hf_api_embed(texts: List[str]) -> List[List[float]]:
-    """
-    Calls the HuggingFace Inference API to embed a batch of texts.
-    Returns normalized 384-dim vectors.
-
-    The API accepts up to ~100 texts per request. For large batches the caller
-    should chunk appropriately, but typical document ingestion (10-50 chunks)
-    is within limits.
-    """
-    headers = {
-        "Authorization": f"Bearer {settings.HF_API_KEY}",
-        "Content-Type": "application/json",
-    }
-    payload = json.dumps({"inputs": texts, "options": {"wait_for_model": True}}).encode()
-
-    req = urllib.request.Request(_HF_API_URL, data=payload, headers=headers, method="POST")
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            result = json.loads(resp.read().decode())
-    except urllib.error.HTTPError as e:
-        body = e.read().decode(errors="replace")
-        raise RuntimeError(f"HuggingFace API error ({e.code}): {body}") from e
-    except Exception as e:
-        raise RuntimeError(f"HuggingFace API request failed: {e}") from e
+        if _local_model is None:
+            from sentence_transformers import SentenceTransformer
 
-    # HF feature-extraction API returns a list of lists (one per input)
-    if not isinstance(result, list) or not result:
-        raise RuntimeError(f"Unexpected HuggingFace API response shape: {type(result)}")
-
-    # Normalize each vector to unit length (BGE models perform best with L2-norm)
-    normalized = []
-    for vec in result:
-        norm = math.sqrt(sum(v * v for v in vec))
-        normalized.append([v / norm for v in vec] if norm > 0 else vec)
-    return normalized
+            _local_model = SentenceTransformer(settings.EMBEDDING_MODEL_NAME, device="cpu")
+        vectors = _local_model.encode(
+            texts, normalize_embeddings=True, show_progress_bar=False, batch_size=32, convert_to_numpy=True
+        )
+    except Exception as exc:
+        raise EmbeddingUnavailable(f"local model failed ({type(exc).__name__})") from exc
+    return [v.tolist() for v in vectors]
 
 
-def _hf_api_embed_single(text: str) -> List[float]:
-    return _hf_api_embed([text])[0]
+def _hf_embed(texts: List[str]) -> List[List[float]]:
+    url = HF_ROUTER_URL.format(model=settings.EMBEDDING_MODEL_NAME)
+    out: List[List[float]] = []
+    for i in range(0, len(texts), HF_BATCH):
+        payload = json.dumps({"inputs": texts[i:i + HF_BATCH]}).encode()
+        req = urllib.request.Request(
+            url,
+            data=payload,
+            headers={"Authorization": f"Bearer {settings.HF_API_KEY}", "Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=TIMEOUT_SECONDS) as resp:
+                result: Any = json.loads(resp.read().decode())
+        except urllib.error.HTTPError as exc:
+            raise EmbeddingUnavailable(f"Hugging Face API returned HTTP {exc.code}") from exc
+        except Exception as exc:
+            raise EmbeddingUnavailable(f"Hugging Face API request failed ({type(exc).__name__})") from exc
+        if not isinstance(result, list) or len(result) != len(texts[i:i + HF_BATCH]):
+            raise EmbeddingUnavailable("unexpected Hugging Face API response shape")
+        out.extend(_normalize([float(x) for x in vec]) for vec in result)
+    return out
 
 
-# ── Fallback (no model, no API key) ───────────────────────────────────────────
-
-def _fallback_embedding(text: str) -> List[float]:
-    """
-    Deterministic 384-dim fallback embedding based on SHA-256 hashing.
-    Has NO semantic meaning. Semantic search will return nonsense results.
-    Only acceptable for CI smoke tests where real embeddings are unavailable.
-    """
-    vector = [0.0] * 384
+def _hash_embed(text: str) -> List[float]:
+    """TEST ONLY. Token-hash vector; shares tokens => some similarity, no semantics."""
+    vector = [0.0] * EMBEDDING_DIM
     for token in text.lower().split():
         digest = hashlib.sha256(token.encode("utf-8")).digest()
-        index = int.from_bytes(digest[:2], "big") % len(vector)
-        sign = 1.0 if digest[2] % 2 == 0 else -1.0
-        vector[index] += sign
+        vector[int.from_bytes(digest[:2], "big") % EMBEDDING_DIM] += 1.0 if digest[2] % 2 == 0 else -1.0
     norm = math.sqrt(sum(v * v for v in vector))
-    return [v / norm for v in vector] if norm > 0 else vector
+    return [v / norm for v in vector] if norm else [1.0] + [0.0] * (EMBEDDING_DIM - 1)
+
+
+def _embed(space: EmbeddingSpace, texts: List[str]) -> List[List[float]]:
+    if space.provider == "local":
+        vectors = _local_embed(texts)
+    elif space.provider == "hf_api":
+        vectors = _hf_embed(texts)
+    else:
+        vectors = [_hash_embed(t) for t in texts]
+    for v in vectors:
+        if len(v) != space.dimension:
+            raise EmbeddingUnavailable(f"expected {space.dimension}-d vectors, got {len(v)}")
+    return vectors
 
 
 # ── Public API ─────────────────────────────────────────────────────────────────
 
 @observe_time("generate_embeddings")
-def generate_embeddings(texts: List[str]) -> List[List[float]]:
-    """
-    Generates 384-dimensional normalized embeddings for a list of document chunks.
-    Selects the appropriate execution path automatically.
-    """
+def generate_embeddings(texts: List[str]) -> tuple[List[List[float]], EmbeddingSpace]:
+    """Embeds document chunks. Raises EmbeddingUnavailable; never substitutes vectors."""
+    space = active_space()
+    if space is None:
+        raise EmbeddingUnavailable("no embedding provider configured")
     if not texts:
-        return []
-
-    # Path 1: HuggingFace Inference API (Vercel + HF_API_KEY set)
-    if settings.HF_API_KEY:
-        try:
-            return _hf_api_embed(texts)
-        except Exception as e:
-            logger.error("HuggingFace API embedding failed, falling back: %s", e)
-
-    # Path 2: Local sentence-transformers (dev / Railway)
-    if not _ON_VERCEL:
-        try:
-            model = _get_local_model()
-            embeddings = model.encode(
-                texts,
-                normalize_embeddings=True,
-                show_progress_bar=False,
-                batch_size=32,
-                convert_to_numpy=True,
-            )
-            return [e.tolist() for e in embeddings]
-        except Exception as e:
-            logger.error("Local embedding model failed, falling back: %s", e)
-
-    # Path 3: Deterministic hash fallback — semantic search will NOT work
-    logger.warning(
-        "Using hash-based fallback embeddings — semantic search is DISABLED. "
-        "Set HF_API_KEY to enable real embeddings on Vercel."
-    )
-    return [_fallback_embedding(t) for t in texts]
+        return [], space
+    return _embed(space, texts), space
 
 
 @observe_time("generate_query_embedding")
-def generate_query_embedding(query: str) -> List[float]:
-    """
-    Generates a normalized query embedding.
-    Applies the BGE retrieval instruction prefix for optimal similarity ranking.
-    """
-    instruction_query = f"Represent this sentence for searching relevant passages: {query}"
-
-    # Path 1: HuggingFace Inference API
-    if settings.HF_API_KEY:
-        try:
-            return _hf_api_embed_single(instruction_query)
-        except Exception as e:
-            logger.error("HuggingFace API query embedding failed, falling back: %s", e)
-
-    # Path 2: Local model
-    if not _ON_VERCEL:
-        try:
-            model = _get_local_model()
-            embedding = model.encode(
-                instruction_query,
-                normalize_embeddings=True,
-                show_progress_bar=False,
-            )
-            return embedding.tolist()
-        except Exception as e:
-            logger.error("Local query embedding failed, falling back: %s", e)
-
-    logger.warning(
-        "Using hash-based fallback for query embedding — results will be meaningless. "
-        "Set HF_API_KEY to enable real embeddings."
-    )
-    return _fallback_embedding(instruction_query)
+def generate_query_embedding(query: str) -> tuple[List[float], EmbeddingSpace]:
+    space = active_space()
+    if space is None:
+        raise EmbeddingUnavailable("no embedding provider configured")
+    text = BGE_QUERY_PREFIX + query if space.provider in ("local", "hf_api") else query
+    return _embed(space, [text])[0], space

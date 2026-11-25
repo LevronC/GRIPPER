@@ -86,7 +86,12 @@ def test_simulate_allows_pm(client: TestClient, make_user, no_db, monkeypatch):
 def test_semantic_search_restricted_to_research_roles(client, make_user, no_db, monkeypatch, role, expected):
     user = make_user(role=role)
     app.dependency_overrides[get_current_user] = lambda: user
-    monkeypatch.setattr("app.api.endpoints.search_documents", lambda *_a, **_k: [])
+    from app.services.retrieval.searcher import SearchOutcome
+
+    monkeypatch.setattr(
+        "app.api.endpoints.hybrid_search",
+        lambda *_a, **_k: SearchOutcome(results=[], retrieval_mode="full_text_only"),
+    )
     try:
         response = client.post("/search/semantic", json={"query": "liquidity", "limit": 3})
         assert response.status_code == expected

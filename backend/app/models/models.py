@@ -84,7 +84,13 @@ class ResearchReport(Base):
     sector: Mapped[str] = mapped_column(String(100), nullable=False)
     company: Mapped[str] = mapped_column(String(255), nullable=False)
     recommendation: Mapped[str] = mapped_column(String(50), nullable=False)  # buy, hold, sell
-    status: Mapped[str] = mapped_column(String(50), default="draft")  # pending, processed, failed
+    # pending -> processing -> processed | failed | duplicate
+    status: Mapped[str] = mapped_column(String(50), default="pending")
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    # Sanitised, user-facing failure reason (never raw exception text).
+    error_message: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    processing_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     file_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)  # SHA-256
     # Stable reference to the uploaded file. On Vercel this is a Blob URL
     # (https://...). In local dev it is an absolute filesystem path.
@@ -104,8 +110,13 @@ class DocumentChunk(Base):
     institution_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("institutions.id", ondelete="CASCADE"), nullable=False)
     report_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("research_reports.id", ondelete="CASCADE"), nullable=False)
     content: Mapped[str] = mapped_column(String, nullable=False)
-    # Using 384 dimensions for HuggingFace all-MiniLM-L6-v2 embeddings
-    embedding: Mapped[list] = mapped_column(Vector(384), nullable=False)
+    # 384-d BAAI/bge-small-en-v1.5 vectors. NULL when no embedding provider was available
+    # at ingestion (the chunk is still full-text searchable).
+    embedding: Mapped[Optional[list]] = mapped_column(Vector(384), nullable=True)
+    # Embedding space id (e.g. "BAAI/bge-small-en-v1.5@384"); vector search only compares
+    # vectors from the active space. "legacy-unknown" marks pre-provenance rows.
+    embedding_model: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    embedding_provider: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     metadata_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=text("TIMEZONE('utc', NOW())"))
 

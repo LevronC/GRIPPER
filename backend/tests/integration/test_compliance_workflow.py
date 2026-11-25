@@ -197,7 +197,7 @@ def test_explanation_with_search_failure_stays_open(api, two_tenants, monkeypatc
     def boom(*_a, **_k):
         raise RuntimeError("search down")
 
-    monkeypatch.setattr("app.services.governance.explain.search_documents", boom)
+    monkeypatch.setattr("app.services.governance.explain.hybrid_search", boom)
     body = api.post(f"/violations/{two_tenants.a.event_id}/explain", headers=two_tenants.a.auth("pm")).json()
     assert body["violation_status"] == "open"
     assert body["research_status"] == "unavailable"
