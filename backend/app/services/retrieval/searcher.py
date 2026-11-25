@@ -21,10 +21,11 @@ from sqlalchemy.orm import Session
 from app.core.observability import observe_time
 from app.models import DocumentChunk, ResearchReport
 from app.services.embeddings.generator import EmbeddingUnavailable, generate_query_embedding
+from app.services.retrieval.fusion import DEFAULT_K, reciprocal_rank_fusion
 
 logger = logging.getLogger(__name__)
 
-RRF_K = 60.0
+RRF_K = DEFAULT_K
 
 
 @dataclass
@@ -71,7 +72,7 @@ def hybrid_search(db: Session, query: str, institution_id: uuid.UUID, limit: int
             .filter(tenant)
             .filter(DocumentChunk.embedding.isnot(None))
             .filter(DocumentChunk.embedding_model == space.space_id)
-            .order_by(distance)
+            .order_by(distance, DocumentChunk.id)  # id breaks distance ties deterministically
             .limit(candidates)
         )
         for chunk, company, sector, dist in db.execute(vector_stmt).all():
@@ -88,29 +89,13 @@ def hybrid_search(db: Session, query: str, institution_id: uuid.UUID, limit: int
         .join(ResearchReport, DocumentChunk.report_id == ResearchReport.id)
         .filter(tenant)
         .filter(ts_vector.op("@@")(ts_query))
-        .order_by(text("rank DESC"))
+        .order_by(text("rank DESC"), DocumentChunk.id)  # id breaks rank ties deterministically
         .limit(candidates)
     )
     text_docs = [_row_to_doc(c, co, se, float(rank)) for c, co, se, rank in db.execute(text_stmt).all()]
 
-    # --- 3. Reciprocal Rank Fusion: score(d) = sum over legs of 1 / (k + rank_leg(d)), rank from 1 ---
-    rrf_scores: Dict[str, float] = {}
-    docs_map: Dict[str, Dict[str, Any]] = {}
-    for rank, doc in enumerate(vector_docs):
-        cid = doc["chunk_id"]
-        docs_map[cid] = doc
-        rrf_scores[cid] = rrf_scores.get(cid, 0.0) + 1.0 / (RRF_K + rank + 1)
-    for rank, doc in enumerate(text_docs):
-        cid = doc["chunk_id"]
-        docs_map.setdefault(cid, doc)
-        rrf_scores[cid] = rrf_scores.get(cid, 0.0) + 1.0 / (RRF_K + rank + 1)
-
-    ordered = sorted(rrf_scores, key=lambda cid: rrf_scores[cid], reverse=True)
-    results = []
-    for cid in ordered[:limit]:
-        doc = docs_map[cid]
-        doc["rrf_score"] = rrf_scores[cid]
-        results.append(doc)
+    # --- 3. Reciprocal Rank Fusion over chunks (see fusion.py for exact semantics) ---
+    results = reciprocal_rank_fusion(vector_docs, text_docs, k=RRF_K, limit=limit)
 
     return SearchOutcome(
         results=results,
