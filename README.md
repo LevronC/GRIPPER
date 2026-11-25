@@ -80,7 +80,7 @@ run `scripts/seed_demo.py` (see [docs/DEMO.md](docs/DEMO.md)); it refuses to run
 ├── src/                  # React landing + terminal UI
 ├── backend/              # FastAPI, SQLAlchemy, Alembic, workers
 ├── api/                  # Vercel serverless entry (mounts backend at /api)
-├── docs/                 # DEMO, RBAC, internal planning notes
+├── docs/                 # security, testing, deployment, RBAC, demo
 └── .github/workflows/    # CI (lint, build, pytest)
 ```
 
@@ -96,14 +96,13 @@ run `scripts/seed_demo.py` (see [docs/DEMO.md](docs/DEMO.md)); it refuses to run
 ## Tests
 
 ```bash
-# Automated suite (CI)
 cd backend && pip install -r requirements-dev.txt
-pytest tests/ -v
-
-# Legacy integration scripts (require local Postgres + Redis)
-cd backend && export PYTHONPATH=. && python test_governance.py
-cd backend && export PYTHONPATH=. && python test_rag.py
+ruff check . && mypy
+pytest tests -m "not integration"   # unit
+pytest tests -m integration          # real Postgres + pgvector + Redis, restricted DB role
 ```
+
+See [docs/TESTING.md](docs/TESTING.md) for the integration setup and what each suite proves.
 
 ## Deployment (Vercel)
 

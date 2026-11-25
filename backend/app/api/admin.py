@@ -100,11 +100,12 @@ def create_invitation(
     db.add(inv)
     db.flush()
     institution = db.get(models.Institution, admin.institution_id)
+    institution_name = institution.name if institution else "your institution"
     try:
         send_email(
             email,
-            f"You're invited to {institution.name} on Gripper",
-            f"{admin.email} invited you to join {institution.name} as {payload.role}.\n\n"
+            f"You're invited to {institution_name} on Gripper",
+            f"{admin.email} invited you to join {institution_name} as {payload.role}.\n\n"
             f"Accept within {int(INVITATION_TTL.total_seconds() // 3600)} hours:\n"
             f"{app_link('invite=' + raw)}\n",
         )

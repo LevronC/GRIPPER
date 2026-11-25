@@ -238,7 +238,7 @@ def request_password_reset(payload: PasswordResetRequest, request: Request, db: 
             models.PasswordResetToken.user_id == user.id,
             models.PasswordResetToken.created_at > now - timedelta(hours=1),
         )
-    ).scalar()
+    ).scalar() or 0
     if recent >= RESET_TOKENS_PER_ACCOUNT_PER_HOUR:
         return _RESET_ACK  # silently capped; response must not differ
 

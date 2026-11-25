@@ -7,3 +7,5 @@ ignore = ["E501"]
 
 [lint.per-file-ignores]
 "tests/*" = ["E402"]
+# Alembic's env.py must extend sys.path before importing the app.
+"migrations/env.py" = ["E402"]

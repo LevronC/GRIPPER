@@ -8,7 +8,7 @@ on:
 
 jobs:
   frontend:
-    name: Frontend build & lint
+    name: Frontend lint, typecheck, build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,11 +17,17 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
-      - run: npm run lint
-      - run: npm run build
+      - name: Lint
+        run: npm run lint
+      - name: Type check
+        run: npx tsc -b --noEmit
+      - name: Production build
+        run: npm run build
+      - name: Dependency audit (production deps, high+)
+        run: npm audit --omit=dev --audit-level=high
 
   backend:
-    name: Backend tests
+    name: Backend lint, typecheck, unit + integration tests
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -54,8 +60,12 @@ jobs:
       REDIS_URL: redis://localhost:6379/0
       SECRET_KEY: ci-test-secret-key-0123456789abcdef
       ENVIRONMENT: test
+      # Integration tests FAIL (instead of skipping) if Postgres/Redis are missing.
       REQUIRE_INTEGRATION: "1"
       PYTHONPATH: .
+    defaults:
+      run:
+        working-directory: backend
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -63,61 +73,39 @@ jobs:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: backend/requirements-ci.lock
-      - name: Install dependencies
-        working-directory: backend
+      - name: Install dependencies (locked)
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-ci.txt -c requirements-ci.lock
-      - name: Check Vercel requirements match backend runtime pins
+      - name: Vercel requirements match backend runtime pins
+        working-directory: .
         run: |
           diff <(grep -E '^[A-Za-z]' requirements.txt | sort) \
                <(grep -E '^[A-Za-z]' backend/requirements-base.txt | sort)
       - name: Dependency vulnerability audit
-        working-directory: backend
         run: pip-audit -r requirements-ci.txt
+      - name: Ruff (entire backend)
+        run: ruff check .
+      - name: Mypy
+        run: mypy
+      - name: Unit tests (no database)
+        run: pytest tests -m "not integration" -q
       - name: Create pgvector extension
-        working-directory: backend
         run: |
           python - <<'PY'
           import os
           from sqlalchemy import create_engine, text
           url = os.environ["MIGRATION_DATABASE_URL"].replace("postgresql://", "postgresql+psycopg2://")
-          engine = create_engine(url)
-          with engine.begin() as conn:
-              result = conn.execute(text("SELECT extversion FROM pg_extension WHERE extname='vector'"))
-              row = result.fetchone()
-              if row:
-                  print("vector already installed, version:", row[0])
-              else:
-                  conn.execute(text("CREATE EXTENSION vector"))
-                  print("vector extension: created")
+          with create_engine(url).begin() as conn:
+              conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
           PY
-      - name: Run migrations
-        working-directory: backend
-        run: |
-          if ! alembic upgrade head -v 2>&1 | tee /tmp/alembic_out.txt; then
-            echo "## Alembic migration failure" >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-            cat /tmp/alembic_out.txt >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-            exit 1
-          fi
+      - name: Migrations (owner role)
+        run: alembic upgrade head
+      - name: Migration round trip (downgrade Phase 1 revisions, re-upgrade)
+        run: alembic downgrade f4de4f049821 && alembic upgrade head
       - name: Create restricted runtime role
-        working-directory: backend
         run: APP_DB_USER=gripper_app APP_DB_PASSWORD=gripper_app_ci python scripts/create_app_role.py
       - name: Verify runtime role cannot bypass RLS
-        working-directory: backend
         run: python scripts/check_db_role.py > /dev/null
-      - name: Ruff lint
-        working-directory: backend
-        run: ruff check tests app/core/rbac.py app/api/deps.py app/db/migrate.py
-      - name: Pytest
-        working-directory: backend
-        run: |
-          if ! pytest tests/ -v --tb=short 2>&1 | tee /tmp/pytest_out.txt; then
-            echo "## Pytest failures" >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-            cat /tmp/pytest_out.txt >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-            exit 1
-          fi
+      - name: Integration tests (real Postgres + pgvector + Redis, restricted role)
+        run: pytest tests -m integration -v --tb=short

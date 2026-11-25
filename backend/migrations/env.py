@@ -7,7 +7,7 @@ from sqlalchemy import create_engine, pool
 sys.path.insert(0, os.path.realpath(os.path.join(os.path.dirname(__file__), '..')))
 
 from app.models import Base  # Load Base from new models package
-import app.models  # Load models to register metadata
+import app.models  # noqa: F401  (import registers every model on Base.metadata)
 
 from alembic import context
 

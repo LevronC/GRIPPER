@@ -365,3 +365,31 @@ def test_demo_seed_local_development_creates_synthetic_tenant(owner_engine, no_d
     with owner_engine.connect() as conn:
         name = conn.execute(text("SELECT name FROM institutions WHERE slug = 'synthetic-demo'")).scalar()
     assert "Synthetic" in name and "not a real institution" in name
+
+
+def test_logout_revokes_token_when_redis_available(client, owner_engine, two_tenants, monkeypatch):
+    """Ported from the legacy backend/test_logout.py script."""
+    from app.core.redis_client import get_redis_client
+
+    if get_redis_client() is None:
+        if os.getenv("REQUIRE_INTEGRATION") == "1":
+            pytest.fail("Redis required for the logout revocation test")
+        pytest.skip("Redis unavailable")
+    email = _set_password(owner_engine, two_tenants.a.users["analyst"])
+    token = client.post("/auth/login", json={"email": email, "password": PASSWORD}).json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    assert client.get("/portfolios", headers=headers).status_code == 200
+    out = client.post("/auth/logout", headers=headers)
+    assert out.status_code == 200 and out.json()["revoked"] is True
+    assert client.get("/portfolios", headers=headers).status_code == 401
+    # A fresh login still works.
+    fresh = client.post("/auth/login", json={"email": email, "password": PASSWORD}).json()["access_token"]
+    assert client.get("/portfolios", headers={"Authorization": f"Bearer {fresh}"}).status_code == 200
+
+
+def test_logout_reports_when_revocation_impossible(client, owner_engine, two_tenants, monkeypatch):
+    monkeypatch.setattr("app.core.security.get_redis_client", lambda: None)
+    email = _set_password(owner_engine, two_tenants.a.users["analyst"])
+    token = client.post("/auth/login", json={"email": email, "password": PASSWORD}).json()["access_token"]
+    out = client.post("/auth/logout", headers={"Authorization": f"Bearer {token}"})
+    assert out.status_code == 200 and out.json()["revoked"] is False  # honest about the limitation

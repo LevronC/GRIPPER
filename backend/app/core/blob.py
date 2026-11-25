@@ -21,7 +21,6 @@ import os
 import urllib.request
 import urllib.error
 import json
-from typing import Optional
 
 from app.core.config import settings
 

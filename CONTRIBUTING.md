@@ -15,8 +15,8 @@ Thank you for your interest in contributing to the Gripper Risk Terminal.
 
 1. Create a feature branch from `main`
 2. Run checks locally before opening a PR:
-   - `npm run lint && npm run build`
-   - `cd backend && ruff check app tests && pytest tests/ -v`
+   - `npm run lint && npx tsc -b --noEmit && npm run build`
+   - `cd backend && ruff check . && mypy && pytest tests` (see [docs/TESTING.md](docs/TESTING.md))
 3. Keep changes focused; include tests for new behavior
 4. CI must pass (see `.github/workflows/ci.yml`)
 
@@ -34,6 +34,7 @@ Do not commit secrets, `.env` files, or production credentials. Report security 
 - **TypeScript/React:** ESLint (`npm run lint`)
 - Match existing patterns in the file you are editing
 
-## Demo accounts
+## Demo data
 
-See [docs/DEMO.md](docs/DEMO.md) for seeded demo credentials (development/preview only).
+There are no shared demo credentials. See [docs/DEMO.md](docs/DEMO.md) to create a
+local synthetic institution with `scripts/seed_demo.py`.

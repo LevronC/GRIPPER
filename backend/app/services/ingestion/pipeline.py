@@ -99,7 +99,7 @@ def ingest_document(db: Session, report_id: uuid.UUID, file_ref: str, institutio
     """Runs one ingestion attempt. Returns the number of chunks stored. Raises on failure."""
     report = _load_report(db, report_id, institution_id)
     if report.status == "processed":
-        return db.execute(select(func.count(DocumentChunk.id)).where(DocumentChunk.report_id == report_id)).scalar()
+        return db.execute(select(func.count(DocumentChunk.id)).where(DocumentChunk.report_id == report_id)).scalar() or 0
     report.status = "processing"
     report.attempts = (report.attempts or 0) + 1
     report.processing_started_at = _utcnow()

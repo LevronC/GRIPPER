@@ -1,4 +1,4 @@
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 # Static repository of ticker metadata for compliance analysis.
 # Maps ticker symbols to their sector and market capitalization class.
@@ -63,7 +63,7 @@ def validate_single_position(holding: Any, threshold: float) -> Optional[Dict[st
         }
     return None
 
-def validate_sector_exposures(holdings: List[Any], threshold: float) -> List[Dict[str, Any]]:
+def validate_sector_exposures(holdings: Sequence[Any], threshold: float) -> List[Dict[str, Any]]:
     """
     Checks if combined portfolio weights in any sector exceed the limit.
     """
@@ -89,7 +89,7 @@ def validate_sector_exposures(holdings: List[Any], threshold: float) -> List[Dic
             
     return violations
 
-def validate_liquidity_constraints(holdings: List[Any], max_micro_cap_threshold: float) -> Optional[Dict[str, Any]]:
+def validate_liquidity_constraints(holdings: Sequence[Any], max_micro_cap_threshold: float) -> Optional[Dict[str, Any]]:
     """
     Ensures combined weight in highly illiquid micro-cap stocks does not exceed limits.
     """
