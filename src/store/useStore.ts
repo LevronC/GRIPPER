@@ -304,7 +304,8 @@ export const useStore = create<GripperState>((set, get) => {
         });
         if (res.ok) {
           const data = await res.json();
-          set({ documents: data });
+          // GET /documents is paginated: { total, page, page_size, results }.
+          set({ documents: Array.isArray(data?.results) ? data.results : [] });
         }
       } catch (err) {
         console.error('Failed to fetch research documents', err);

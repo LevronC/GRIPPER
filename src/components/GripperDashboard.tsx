@@ -689,7 +689,7 @@ export default function GripperDashboard() {
                 <div className="absolute top-0 right-0 w-1/2 h-full bg-cyan-500/5 blur-[120px] -z-10 group-hover:bg-cyan-500/10 transition-colors" />
                 <div>
                   <h3 className="text-3xl font-black text-white tracking-tighter uppercase">Search research</h3>
-                  <p className="text-[10px] text-slate-500 font-black tracking-[0.4em] uppercase mt-2">Semantic Cross-Referencing</p>
+                  <p className="text-[10px] text-slate-500 font-black tracking-[0.4em] uppercase mt-2">Keyword + semantic search</p>
                 </div>
                 <form onSubmit={handleSemanticSearch} className="flex gap-4">
                   <div className="relative flex-1">
