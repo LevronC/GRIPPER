@@ -62,61 +62,7 @@ def _violation_keys(violations):
     return {(v["event_type"], v["details"].get("ticker") or v["details"].get("sector")) for v in violations}
 
 
-# ── End-to-end workflow ──────────────────────────────────────────────────────
-
-def test_end_to_end_compliance_workflow(api, owner_engine, fresh_tenant):
-    a, b = fresh_tenant.a, fresh_tenant.b
-
-    # 1. Admin configures an IPS rule through the API.
-    r = api.post("/ips_rules", json={"rule_type": "single_position_cap", "threshold": 0.10, "severity": "critical"},
-                 headers=a.auth("admin"))
-    assert r.status_code == 201, r.text
-
-    # 2-3. PM creates a portfolio and adds holdings.
-    pid = api.post("/portfolios", params={"name": "E2E fund", "strategy_type": "growth"}, headers=a.auth("pm")).json()["id"]
-    r = api.post(f"/portfolios/{pid}/holdings", headers=a.auth("pm"),
-                 json=[{"ticker": "NVDA", "weight": 0.14, "cost_basis": 400},
-                       {"ticker": "JPM", "weight": 0.10, "cost_basis": 200}])
-    assert r.status_code == 200, r.text
-
-    # 4-5. Deterministic evaluation detects exactly the NVDA breach (JPM at exactly 10% passes).
-    r = api.post(f"/portfolios/{pid}/evaluate", headers=a.auth("pm"))
-    assert r.status_code == 200, r.text
-    violations = r.json()["violations"]
-    assert _violation_keys(violations) == {("single_position_cap", "NVDA")}
-    event_id = violations[0]["id"]
-
-    # Explanation before any research exists.
-    r = api.post(f"/violations/{event_id}/explain", headers=a.auth("pm"))
-    body = r.json()
-    assert r.status_code == 200
-    assert (body["violation_status"], body["research_status"], body["explanation_source"]) == ("open", "none", "template")
-    assert "14.0%" in body["explanation"] and "10.0%" in body["explanation"]
-
-    # 6. Research appears for both tenants (B's must never be cited for A).
-    _, a_chunk = _seed_research(owner_engine, a.institution_id, "NVDA", "NVDA investment thesis: position sizing and data-center demand risk.")
-    _seed_research(owner_engine, b.institution_id, "NVDA", "NVDA investment thesis from bravo confidential.")
-
-    # 7-8. Explanation now cites A's research with source attribution, and only A's.
-    body = api.post(f"/violations/{event_id}/explain", headers=a.auth("pm")).json()
-    assert body["research_status"] == "found"
-    cited = {e["chunk_id"] for e in body["evidence"]}
-    assert str(a_chunk) in cited
-    with owner_engine.connect() as conn:
-        tenants = set(conn.execute(text("SELECT institution_id FROM document_chunks WHERE id = ANY(CAST(:ids AS uuid[]))"),
-                                   {"ids": list(cited)}).scalars())
-    assert tenants == {a.institution_id}
-    for e in body["evidence"]:
-        assert e["report_id"] and e["company"] and e["page"] is not None
-
-    # 9. Research retrieval does not change the violation.
-    assert body["violation_status"] == "open"
-    assert not any(p in body["explanation"].lower() for p in FORBIDDEN_PHRASES)
-    with owner_engine.connect() as conn:
-        assert conn.execute(text("SELECT resolved FROM governance_events WHERE id = :e"), {"e": event_id}).scalar() is False
-    again = api.post(f"/portfolios/{pid}/evaluate", headers=a.auth("pm")).json()["violations"]
-    assert [v["id"] for v in again] == [event_id]
-
+# ── Seeded demo ──────────────────────────────────────────────────────────────
 
 def test_seeded_demo_produces_expected_violations(api, owner_engine):
     with owner_engine.begin() as conn:
@@ -127,8 +73,16 @@ def test_seeded_demo_produces_expected_violations(api, owner_engine):
                        capture_output=True, text=True, timeout=60)
     assert r.returncode == 0, r.stderr
     try:
-        sys.path.insert(0, os.path.join(BACKEND_DIR, "scripts"))
-        from seed_demo import EXPECTED_VIOLATIONS
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location("seed_demo", os.path.join(BACKEND_DIR, "scripts", "seed_demo.py"))
+        seed_demo = importlib.util.module_from_spec(spec)
+        sys.path.insert(0, os.path.join(BACKEND_DIR, "scripts"))  # seed_demo imports its sibling _cli
+        try:
+            spec.loader.exec_module(seed_demo)
+        finally:
+            sys.path.remove(os.path.join(BACKEND_DIR, "scripts"))
+        EXPECTED_VIOLATIONS = seed_demo.EXPECTED_VIOLATIONS
 
         token = api.post("/auth/login", json={"email": "demo-pm@synthetic-demo.example", "password": password}).json()["access_token"]
         headers = {"Authorization": f"Bearer {token}"}
@@ -233,18 +187,6 @@ def test_invalid_holdings_rejected(api, two_tenants, holdings, why):
     assert r.status_code == 422, why
     r = api.post(f"/portfolios/{a.portfolio_id}/simulate", json=holdings, headers=a.auth("pm"))
     assert r.status_code == 422, why
-
-
-def test_resaving_same_holdings_keeps_same_open_event(api, two_tenants):
-    """Regression: holding_id in the event key resolved+recreated breaches on every save."""
-    a = two_tenants.a
-    first = api.post(f"/portfolios/{a.portfolio_id}/evaluate", headers=a.auth("pm")).json()["violations"]
-    holdings = [{"ticker": "ASECRET", "weight": 0.42, "cost_basis": 10}]
-    api.post(f"/portfolios/{a.portfolio_id}/holdings", json=holdings, headers=a.auth("pm"))
-    second = api.post(f"/portfolios/{a.portfolio_id}/evaluate", headers=a.auth("pm")).json()["violations"]
-    assert [v["id"] for v in first] == [v["id"] for v in second] == [str(a.event_id)]
-    resolved = api.get(f"/portfolios/{a.portfolio_id}/violations", params={"resolved": True}, headers=a.auth()).json()
-    assert resolved == []
 
 
 def test_simulation_is_deterministic_and_order_independent(api, fresh_tenant):

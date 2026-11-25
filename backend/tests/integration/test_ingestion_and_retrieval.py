@@ -211,11 +211,12 @@ def test_search_api_reports_mode(api, two_tenants, monkeypatch):
 
 def test_health_reports_capabilities(api, monkeypatch):
     caps = api.get("/health").json()["capabilities"]
-    assert caps["semantic_search"] is True and caps["embedding"]["provider"] == "hash_test"
+    assert caps["semantic_search"] is True and caps["retrieval_mode"] == "hybrid"
+    assert caps["embedding"] == {"provider": "hash_test", "model": "hash-test-v1", "dimension": 384}
     monkeypatch.setenv("EMBEDDING_PROVIDER", "none")
     caps = api.get("/health").json()["capabilities"]
-    assert caps == {**caps, "semantic_search": False, "retrieval_mode": "full_text_only", "embedding": None}
-    assert "HF_API_KEY" not in str(caps)
+    assert caps["semantic_search"] is False and caps["retrieval_mode"] == "full_text_only" and caps["embedding"] is None
+    assert set(caps) == {"semantic_search", "retrieval_mode", "embedding", "ingestion_mode", "email_delivery"}  # no secrets
 
 
 def test_upload_endpoint_end_to_end(api, owner_engine, two_tenants, tmp_path, monkeypatch):
@@ -264,14 +265,20 @@ def test_stale_processing_job_is_picked_up(owner_engine, runtime_engine, two_ten
 
 
 def test_auto_mode_never_queues_on_vercel_without_declared_worker(monkeypatch):
-    from app.api.endpoints import ingestion_mode
+    from app.api import endpoints
 
+    monkeypatch.setattr(endpoints, "get_task_queue", lambda: object())   # Redis reachable
     monkeypatch.setenv("INGESTION_MODE", "auto")
     monkeypatch.setenv("VERCEL", "1")
     monkeypatch.delenv("INGESTION_WORKER", raising=False)
-    assert ingestion_mode() == "sync"
+    assert endpoints.ingestion_mode() == "sync"        # no worker can exist on Vercel
     monkeypatch.setenv("INGESTION_WORKER", "external")
-    assert ingestion_mode() in ("queue", "sync")  # queue iff Redis reachable
+    assert endpoints.ingestion_mode() == "queue"       # operator declared an external worker
+    monkeypatch.setattr(endpoints, "get_task_queue", lambda: None)
+    assert endpoints.ingestion_mode() == "sync"        # Redis unreachable
+    monkeypatch.delenv("VERCEL")
+    monkeypatch.setattr(endpoints, "get_task_queue", lambda: object())
+    assert endpoints.ingestion_mode() == "queue"       # local dev with Redis
 
 
 def test_queue_mode_with_real_rq_worker(api, owner_engine, two_tenants, tmp_path, monkeypatch):

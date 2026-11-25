@@ -141,7 +141,10 @@ def test_explanation_matches_frontend_contract(api, scenario, owner_engine):
     a, ev = scenario
     _seed_research(owner_engine, a.institution_id, "AAPL", "AAPL investment thesis position sizing risk note.")
     body = _explain(api, a, ev[("single_position_cap", "AAPL")])
-    drawer = open("../src/components/ExplainabilityDrawer.tsx").read()
+    import os
+
+    repo = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__)))))
+    drawer = open(os.path.join(repo, "src", "components", "ExplainabilityDrawer.tsx")).read()
     for field in ("violation_status", "research_status", "explanation", "explanation_source", "evidence"):
         assert re.search(rf"\b{field}\b", drawer), field
         assert field in body

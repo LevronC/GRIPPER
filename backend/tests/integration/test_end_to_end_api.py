@@ -26,7 +26,6 @@ from fastapi.testclient import TestClient
 from sqlalchemy import text
 
 from app.core import email as email_mod
-from app.core import rate_limit
 
 pytestmark = pytest.mark.integration
 
@@ -51,8 +50,6 @@ def provider(request, monkeypatch):
     monkeypatch.setenv("EMBEDDING_PROVIDER", request.param)
     monkeypatch.setenv("EMAIL_BACKEND", "memory")
     monkeypatch.setenv("INGESTION_MODE", "sync")
-    monkeypatch.setattr(rate_limit, "get_redis_client", lambda: None)
-    rate_limit.reset_memory_limits()
     email_mod.OUTBOX.clear()
     return request.param
 

@@ -57,3 +57,19 @@ def make_user():
         )
 
     return _factory
+
+
+@pytest.fixture(autouse=True)
+def isolated_rate_limits(monkeypatch):
+    """
+    Every test client shares one 'IP' (testclient). With Redis-backed counters, logins from
+    earlier tests (or earlier runs within the window) would make later tests flaky with 429.
+    Tests therefore use the in-memory limiter, reset per test. Rate-limit behaviour itself
+    is asserted in tests/integration/test_auth_flows.py against this same limiter.
+    """
+    from app.core import rate_limit
+
+    monkeypatch.setattr(rate_limit, "get_redis_client", lambda: None)
+    rate_limit.reset_memory_limits()
+    yield
+    rate_limit.reset_memory_limits()

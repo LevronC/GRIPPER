@@ -15,7 +15,6 @@ from fastapi.testclient import TestClient
 from sqlalchemy import text
 
 from app.core import email as email_mod
-from app.core import rate_limit
 from app.core.security import get_password_hash
 from app.core.tokens import hash_token
 from app.main import app
@@ -31,12 +30,8 @@ BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(_
 def _email_and_limits(monkeypatch):
     monkeypatch.setenv("EMAIL_BACKEND", "memory")
     email_mod.OUTBOX.clear()
-    rate_limit.reset_memory_limits()
-    # Keep limits local and deterministic for tests.
-    monkeypatch.setattr(rate_limit, "get_redis_client", lambda: None)
     yield
     email_mod.OUTBOX.clear()
-    rate_limit.reset_memory_limits()
 
 
 @pytest.fixture
@@ -113,8 +108,8 @@ def test_invitation_lifecycle(client, owner_engine, two_tenants, caplog):
     email = _new_email()
     r = _invite(client, a, email, role="sector_lead")
     assert r.status_code == 201, r.text
-    assert "token" not in r.text.lower().replace("token_", "")
     raw = _token_from_outbox("invite")
+    assert raw not in r.text and "token" not in r.json()  # the secret only travels by email
 
     with owner_engine.connect() as conn:
         stored = conn.execute(text("SELECT token_hash FROM invitations WHERE id = :i"), {"i": r.json()["id"]}).scalar()
