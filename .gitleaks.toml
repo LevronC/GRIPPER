@@ -1,0 +1,12 @@
+title = "Gripper"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Checked-in test signing keys. They are not provider credentials."
+regexTarget = "secret"
+regexes = [
+  '''ci-test-secret-key-0123456789abcdef''',
+  '''test-secret-key-0123456789abcdef0123''',
+]
