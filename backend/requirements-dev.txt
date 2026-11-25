@@ -4,3 +4,4 @@ pytest-cov==7.1.0
 ruff==0.17.6
 pip-audit==2.10.1
 mypy==2.4.1
+tokenizers==0.23.3

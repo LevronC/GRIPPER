@@ -4,7 +4,7 @@
 cd backend
 pip install -r requirements-dev.txt          # or requirements-ci.txt -c requirements-ci.lock (no torch)
 ruff check . && mypy
-pytest tests -m "not integration"            # unit tests: no database, no network
+pytest tests -m "not integration and not model"   # unit tests: no database, no network
 ```
 
 ## Integration tests (`tests/integration/`)
@@ -40,14 +40,26 @@ they **fail** instead, so CI can never pass silently without infrastructure.
 
 The suite uses `EMBEDDING_PROVIDER=hash_test`: deterministic token-hash vectors that have
 **no semantic meaning**, are allowed only when `ENVIRONMENT=test`, and live in their own
-embedding space. They test retrieval *mechanics* (filtering, fusion, isolation), never
-retrieval *quality*. Two tests use the real model and tokenizer and are skipped where
-`sentence-transformers`/`transformers` are not installed (the CI image excludes torch):
+embedding space. They test retrieval *mechanics* (filtering, fusion, isolation, provenance),
+never retrieval *quality*.
 
-* `test_embeddings.py::test_local_model_produces_semantic_similarity`
-* `test_chunker.py::test_default_chunks_fit_bge_context_window` (8 text types)
+| Suite | Needs | Runs in CI |
+|---|---|---|
+| Chunk-size bounds vs the real BGE tokenizer (`test_chunker.py`) | `tokenizers` + vendored `tests/fixtures/bge-small-en-v1.5.tokenizer.json` (revision `5c38ec7c…`, MIT) | yes, offline |
+| Hugging Face client (`test_embeddings.py::test_hf_*`) | nothing (HTTP is mocked) | yes; **mock-tested only**: no authenticated live call has been made |
+| Real model semantics (`-m model`) | `sentence-transformers` + torch + model download | only via the manual `model-tests` job (`workflow_dispatch`, `run_model_tests=true`) |
 
-Both ran and passed locally on 2026-11-25 with `requirements.txt` installed.
+Run the model suite locally:
+
+```bash
+cd backend
+pip install -r requirements.txt   # includes sentence-transformers
+SECRET_KEY=$(python -c "import secrets;print(secrets.token_hex(32))") ENVIRONMENT=test PYTHONPATH=. pytest tests -m model -v
+```
+
+Last local run (2026-11-25): passed with sentence-transformers 6.3.0, transformers 5.24.1,
+tokenizers 0.23.3, torch 2.15.0, model `BAAI/bge-small-en-v1.5` revision
+`5c38ec7c405ec4b44b94cc5a9bb96e735b38267a`, Python 3.11, macOS (arm64).
 
 ## Not covered by automated tests
 

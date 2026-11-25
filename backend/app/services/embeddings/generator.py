@@ -111,6 +111,8 @@ def active_space() -> Optional[EmbeddingSpace]:
 # ── Providers ──────────────────────────────────────────────────────────────────
 
 def _normalize(vec: List[float]) -> List[float]:
+    if not all(math.isfinite(v) for v in vec):
+        raise EmbeddingUnavailable("provider returned non-finite values")
     norm = math.sqrt(sum(v * v for v in vec))
     if norm == 0:
         raise EmbeddingUnavailable("provider returned a zero vector")
@@ -132,7 +134,22 @@ def _local_embed(texts: List[str]) -> List[List[float]]:
     return [v.tolist() for v in vectors]
 
 
+_HF_STATUS_REASON = {
+    401: "authentication failed (check HF_API_KEY)",
+    403: "access denied (token lacks Inference Providers permission?)",
+    404: "model or endpoint not found",
+    429: "rate limited",
+    503: "model or provider unavailable",
+}
+
+
 def _hf_embed(texts: List[str]) -> List[List[float]]:
+    """
+    Request format per https://huggingface.co/docs/inference-providers/tasks/feature-extraction:
+    body {"inputs": [str, ...]}, response "an array of arrays". The router URL pattern for the
+    hf-inference provider is not given in prose there; it was confirmed only to exist
+    (HTTP 401 without a token, 2026-11-25). A successful authenticated call is UNVERIFIED.
+    """
     url = HF_ROUTER_URL.format(model=settings.EMBEDDING_MODEL_NAME)
     out: List[List[float]] = []
     for i in range(0, len(texts), HF_BATCH):
@@ -147,10 +164,14 @@ def _hf_embed(texts: List[str]) -> List[List[float]]:
             with urllib.request.urlopen(req, timeout=TIMEOUT_SECONDS) as resp:
                 result: Any = json.loads(resp.read().decode())
         except urllib.error.HTTPError as exc:
-            raise EmbeddingUnavailable(f"Hugging Face API returned HTTP {exc.code}") from exc
-        except Exception as exc:
-            raise EmbeddingUnavailable(f"Hugging Face API request failed ({type(exc).__name__})") from exc
-        if not isinstance(result, list) or len(result) != len(texts[i:i + HF_BATCH]):
+            reason = _HF_STATUS_REASON.get(exc.code, "request rejected")
+            raise EmbeddingUnavailable(f"Hugging Face API returned HTTP {exc.code}: {reason}") from exc
+        except (TimeoutError, urllib.error.URLError) as exc:
+            raise EmbeddingUnavailable(f"Hugging Face API unreachable or timed out ({type(exc).__name__})") from exc
+        except ValueError as exc:  # invalid JSON
+            raise EmbeddingUnavailable("Hugging Face API returned malformed JSON") from exc
+        if (not isinstance(result, list) or len(result) != len(texts[i:i + HF_BATCH])
+                or not all(isinstance(vec, list) and all(isinstance(x, (int, float)) for x in vec) for vec in result)):
             raise EmbeddingUnavailable("unexpected Hugging Face API response shape")
         out.extend(_normalize([float(x) for x in vec]) for vec in result)
     return out
@@ -173,9 +194,13 @@ def _embed(space: EmbeddingSpace, texts: List[str]) -> List[List[float]]:
         vectors = _hf_embed(texts)
     else:
         vectors = [_hash_embed(t) for t in texts]
+    if len(vectors) != len(texts):
+        raise EmbeddingUnavailable("provider returned the wrong number of vectors")
     for v in vectors:
         if len(v) != space.dimension:
             raise EmbeddingUnavailable(f"expected {space.dimension}-d vectors, got {len(v)}")
+        if not all(math.isfinite(x) for x in v):
+            raise EmbeddingUnavailable("provider returned non-finite values")
     return vectors
 
 

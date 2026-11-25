@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 
 import pytest
 
@@ -79,16 +80,35 @@ def test_invalid_parameters(budget, overlap):
         chunk_document_pages([{"page_num": 1, "text": "x"}], budget, overlap)
 
 
-@pytest.mark.skipif(importlib.util.find_spec("transformers") is None,
-                    reason="transformers not installed (excluded from CI image); validated locally")
+TOKENIZER = os.path.join(os.path.dirname(__file__), "fixtures", "bge-small-en-v1.5.tokenizer.json")
+
+
+@pytest.mark.skipif(importlib.util.find_spec("tokenizers") is None, reason="tokenizers not installed")
 @pytest.mark.parametrize("kind", sorted(SAMPLES))
 def test_default_chunks_fit_bge_context_window(kind):
-    """Measured with the real BGE tokenizer: every default chunk fits in 512 tokens."""
-    from transformers import AutoTokenizer
+    """
+    Measured with the real BGE WordPiece tokenizer (vendored, pinned revision; see
+    tests/fixtures/README.md): every default chunk fits in bge-small's 512-token window.
+    """
+    from tokenizers import Tokenizer
 
-    tok = AutoTokenizer.from_pretrained("BAAI/bge-small-en-v1.5")
+    tok = Tokenizer.from_file(TOKENIZER)
     chunks = chunk_document_pages([{"page_num": 1, "text": (SAMPLES[kind] + " ") * 80}])
     assert len(chunks) > 1
     for chunk in chunks:
-        n = len(tok.encode(chunk["content"], add_special_tokens=True))
+        n = len(tok.encode(chunk["content"]).ids)  # includes [CLS] and [SEP]
         assert n <= 512, (kind, n)
+
+
+@pytest.mark.skipif(importlib.util.find_spec("tokenizers") is None, reason="tokenizers not installed")
+def test_estimator_is_conservative_on_samples():
+    """The tokenizer-free estimate should not undercount real tokens on realistic text."""
+    from tokenizers import Tokenizer
+
+    tok = Tokenizer.from_file(TOKENIZER)
+    for kind, sample in SAMPLES.items():
+        if kind == "long_words":
+            continue  # documented exception: within ~10%, absorbed by the 450 budget
+        real = len(tok.encode(sample, add_special_tokens=False).ids)
+        est = sum(estimate_tokens(w) for w in sample.split())
+        assert est >= real, (kind, est, real)

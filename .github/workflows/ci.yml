@@ -5,6 +5,13 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Manual runs can include the real-model suite (see the model-tests job).
+  workflow_dispatch:
+    inputs:
+      run_model_tests:
+        description: "Also run tests that load the real BAAI/bge-small-en-v1.5 model (CPU torch, ~1 GB download)"
+        type: boolean
+        default: false
 
 jobs:
   frontend:
@@ -88,8 +95,8 @@ jobs:
         run: ruff check .
       - name: Mypy
         run: mypy
-      - name: Unit tests (no database)
-        run: pytest tests -m "not integration" -q
+      - name: Unit tests (no database; includes real BGE tokenizer checks via vendored tokenizer.json)
+        run: pytest tests -m "not integration and not model" -q
       - name: Create pgvector extension
         run: |
           python - <<'PY'
@@ -109,3 +116,27 @@ jobs:
         run: python scripts/check_db_role.py > /dev/null
       - name: Integration tests (real Postgres + pgvector + Redis, restricted role)
         run: pytest tests -m integration -v --tb=short
+
+  model-tests:
+    name: Real embedding model tests (manual)
+    if: github.event_name == 'workflow_dispatch' && inputs.run_model_tests
+    runs-on: ubuntu-latest
+    env:
+      SECRET_KEY: ci-test-secret-key-0123456789abcdef
+      ENVIRONMENT: test
+      PYTHONPATH: .
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install runtime + CPU-only torch + sentence-transformers
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements-ci.txt -c requirements-ci.lock sentence-transformers==6.3.0
+      - name: Model tests (downloads BAAI/bge-small-en-v1.5 from the Hugging Face Hub)
+        run: pytest tests -m model -v

@@ -419,3 +419,53 @@ def test_documents_list_reports_index_mode(api, owner_engine, two_tenants, tmp_p
     pending = _report(owner_engine, a.institution_id, str(tmp_path / "p.pdf"))
     docs = {d["id"]: d for d in api.get("/documents", headers=a.auth()).json()["results"]}
     assert docs[str(pending)]["index_mode"] is None
+
+
+def test_reembed_moves_quarantined_vectors_into_active_space(owner_engine, two_tenants):
+    """legacy-unknown vectors are excluded from vector search until scripts/reembed.py --apply."""
+    import subprocess
+    import sys
+
+    a = two_tenants.a
+    with owner_engine.begin() as conn:
+        conn.execute(text("UPDATE document_chunks SET embedding_model = 'legacy-unknown', embedding = CAST(:v AS vector) "
+                          "WHERE id = :c"), {"v": "[" + ",".join(["0.05"] * 384) + "]", "c": a.chunk_id})
+    query = "zzunrelatedqueryterm"
+    with SessionLocal() as db:
+        set_tenant(db, a.institution_id)
+        assert hybrid_search(db, query, a.institution_id).legs["vector"] == 0
+
+    backend = os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+    env = {**os.environ, "ENVIRONMENT": "test", "EMBEDDING_PROVIDER": "hash_test"}
+    dry = subprocess.run([sys.executable, "scripts/reembed.py"], cwd=backend, env=env, capture_output=True, text=True, timeout=120)
+    assert dry.returncode == 0 and "legacy-unknown" in dry.stdout and "needs re-embedding" in dry.stdout
+    with owner_engine.connect() as conn:
+        assert conn.execute(text("SELECT embedding_model FROM document_chunks WHERE id = :c"), {"c": a.chunk_id}).scalar() == "legacy-unknown"
+
+    applied = subprocess.run([sys.executable, "scripts/reembed.py", "--apply"], cwd=backend, env=env, capture_output=True, text=True, timeout=120)
+    assert applied.returncode == 0, applied.stderr
+    with owner_engine.connect() as conn:
+        assert conn.execute(text("SELECT embedding_model FROM document_chunks WHERE id = :c"), {"c": a.chunk_id}).scalar() == "hash-test-v1@384"
+    with SessionLocal() as db:
+        set_tenant(db, a.institution_id)
+        assert hybrid_search(db, query, a.institution_id).legs["vector"] == 1
+
+
+def test_reembed_refuses_without_provider(owner_engine):
+    import subprocess
+    import sys
+
+    backend = os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+    r = subprocess.run([sys.executable, "scripts/reembed.py", "--apply"], cwd=backend,
+                       env={**os.environ, "EMBEDDING_PROVIDER": "none"}, capture_output=True, text=True, timeout=60)
+    assert r.returncode != 0 and "No embedding provider" in (r.stderr + r.stdout)
+
+
+def test_unlabelled_vector_rejected_by_database(owner_engine, two_tenants):
+    """CHECK constraint: a vector cannot enter document_chunks without its embedding-space id."""
+    from sqlalchemy.exc import IntegrityError
+
+    a = two_tenants.a
+    with pytest.raises(IntegrityError, match="ck_document_chunks_vector_provenance"):
+        with owner_engine.begin() as conn:
+            conn.execute(text("UPDATE document_chunks SET embedding_model = NULL WHERE id = :c"), {"c": a.chunk_id})

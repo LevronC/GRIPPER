@@ -99,12 +99,97 @@ def test_hf_success_is_normalised(monkeypatch):
     assert abs(sum(v * v for v in vectors[0]) - 1.0) < 1e-9
 
 
+def _http_error(code):
+    def fake(req, timeout):
+        raise urllib.error.HTTPError(req.full_url, code, "err", {}, io.BytesIO(b"{}"))
+    return fake
+
+
+@pytest.mark.parametrize("code, fragment", [
+    (401, "authentication failed"), (403, "access denied"), (404, "not found"),
+    (429, "rate limited"), (503, "unavailable"), (500, "request rejected"),
+])
+def test_hf_http_errors_are_classified(monkeypatch, code, fragment):
+    _hf(monkeypatch)
+    monkeypatch.setattr(gen.urllib.request, "urlopen", _http_error(code))
+    with pytest.raises(gen.EmbeddingUnavailable, match=fragment):
+        gen.generate_embeddings(["a"])
+
+
+@pytest.mark.parametrize("exc", [TimeoutError("timed out"), urllib.error.URLError("dns failure")])
+def test_hf_timeout_and_network_errors(monkeypatch, exc):
+    _hf(monkeypatch)
+
+    def fake(req, timeout):
+        assert timeout == gen.TIMEOUT_SECONDS
+        raise exc
+
+    monkeypatch.setattr(gen.urllib.request, "urlopen", fake)
+    with pytest.raises(gen.EmbeddingUnavailable, match="unreachable or timed out"):
+        gen.generate_query_embedding("q")
+
+
+@pytest.mark.parametrize("body, match", [
+    (b"not json", "malformed JSON"),
+    (b"[[0.1, \"x\"]]", "shape"),
+    (b"[]", "shape"),
+    (("[[" + ",".join(["NaN"] * 384) + "]]").encode(), "non-finite"),
+    (("[[" + ",".join(["0"] * 384) + "]]").encode(), "zero vector"),
+])
+def test_hf_malformed_or_invalid_vectors_rejected(monkeypatch, body, match):
+    _hf(monkeypatch)
+    monkeypatch.setattr(gen.urllib.request, "urlopen", lambda req, timeout: _Resp(body))
+    with pytest.raises(gen.EmbeddingUnavailable, match=match):
+        gen.generate_embeddings(["a"])
+
+
+def test_hf_request_format_and_batching(monkeypatch):
+    import json as _json
+
+    _hf(monkeypatch)
+    calls = []
+    vec = [1.0] + [0.0] * 383
+
+    def fake(req, timeout):
+        body = _json.loads(req.data)
+        calls.append((req.get_header("Authorization"), req.get_header("Content-type"), len(body["inputs"])))
+        return _Resp(_json.dumps([vec] * len(body["inputs"])).encode())
+
+    monkeypatch.setattr(gen.urllib.request, "urlopen", fake)
+    vectors, _ = gen.generate_embeddings([f"t{i}" for i in range(gen.HF_BATCH + 5)])
+    assert len(vectors) == gen.HF_BATCH + 5
+    assert calls == [("Bearer hf_test_key", "application/json", gen.HF_BATCH), ("Bearer hf_test_key", "application/json", 5)]
+
+
+def test_query_embedding_uses_bge_instruction_prefix(monkeypatch):
+    _hf(monkeypatch)
+    seen = {}
+    vec = [1.0] + [0.0] * 383
+
+    def fake(req, timeout):
+        import json as _json
+        seen["inputs"] = _json.loads(req.data)["inputs"]
+        return _Resp(_json.dumps([vec]).encode())
+
+    monkeypatch.setattr(gen.urllib.request, "urlopen", fake)
+    gen.generate_query_embedding("capex risk")
+    assert seen["inputs"] == [gen.BGE_QUERY_PREFIX + "capex risk"]
+
+
+def test_vector_count_mismatch_rejected(monkeypatch):
+    """A provider answering two texts with one vector must not be silently zipped/truncated."""
+    monkeypatch.setattr(gen, "_hf_embed", lambda texts: [[1.0] + [0.0] * 383])
+    with pytest.raises(gen.EmbeddingUnavailable, match="wrong number"):
+        gen._embed(gen.EmbeddingSpace("hf_api", "BAAI/bge-small-en-v1.5", 384), ["a", "b"])
+
+
 requires_model = pytest.mark.skipif(
     importlib.util.find_spec("sentence_transformers") is None,
     reason="sentence-transformers not installed (excluded from CI image); run locally with requirements.txt",
 )
 
 
+@pytest.mark.model
 @requires_model
 def test_local_model_produces_semantic_similarity(monkeypatch):
     """Real BGE model: a paraphrase must score closer than an unrelated sentence."""
