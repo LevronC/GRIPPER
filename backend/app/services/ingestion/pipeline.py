@@ -89,7 +89,7 @@ def ingest_document(db: Session, report_id: uuid.UUID, file_ref: str, institutio
 
             if existing_report:
                 logger.info("Duplicate document found (ID: %s). Marking as processed.", existing_report.id)
-                report = db.query(ResearchReport).filter(ResearchReport.id == report_id).first()
+                report = db.query(ResearchReport).filter(ResearchReport.id == report_id, ResearchReport.institution_id == institution_id).first()
                 if report:
                     report.file_hash = file_hash
                     report.status = "processed"
@@ -97,7 +97,7 @@ def ingest_document(db: Session, report_id: uuid.UUID, file_ref: str, institutio
                     db.commit()
                 return 0
 
-            report = db.query(ResearchReport).filter(ResearchReport.id == report_id).first()
+            report = db.query(ResearchReport).filter(ResearchReport.id == report_id, ResearchReport.institution_id == institution_id).first()
             if report:
                 report.file_hash = file_hash
                 db.flush()
@@ -153,7 +153,7 @@ def ingest_document(db: Session, report_id: uuid.UUID, file_ref: str, institutio
         logger.error("Ingestion failed for report %s: %s", report_id, e)
         try:
             db.rollback()
-            report = db.query(ResearchReport).filter(ResearchReport.id == report_id).first()
+            report = db.query(ResearchReport).filter(ResearchReport.id == report_id, ResearchReport.institution_id == institution_id).first()
             if report:
                 report.status = "failed"
                 db.commit()

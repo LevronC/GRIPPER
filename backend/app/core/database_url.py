@@ -62,7 +62,7 @@ def database_url_error_hint(url: str, exc: Exception | None = None) -> str:
         return (
             "Database connection URL is malformed. If your Supabase/Postgres password "
             "contains special characters (@, #, /, :, ?, &), URL-encode them in "
-            "DATABASE_URL and SUPERUSER_DATABASE_URL. Example: @ becomes %40."
+            "DATABASE_URL and MIGRATION_DATABASE_URL. Example: @ becomes %40."
         )
 
     message = str(exc or "")
@@ -86,9 +86,8 @@ def database_url_error_hint(url: str, exc: Exception | None = None) -> str:
 
     if "relation" in message and "does not exist" in message:
         return (
-            "Database schema is missing. Migrations have not been applied yet. "
-            "Redeploy after setting SUPERUSER_DATABASE_URL (Supabase session/direct "
-            "connection, not transaction pooler) and check /api/health/db."
+            "Database schema is missing. Run `alembic upgrade head` with "
+            "MIGRATION_DATABASE_URL, then check /api/health/db."
         )
 
     return f"Database connection failed: {message or 'unknown error'}"

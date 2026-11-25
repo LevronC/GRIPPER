@@ -1,3 +1,12 @@
+"""
+Schema migrations.
+
+Migrations are a deploy step (`alembic upgrade head` with MIGRATION_DATABASE_URL).
+They run in-process only when AUTO_MIGRATE=true, and then with the owner connection
+(never the runtime connection) under a PostgreSQL advisory lock so concurrent
+serverless cold starts cannot run Alembic simultaneously.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -9,12 +18,14 @@ from alembic.config import Config
 from sqlalchemy import create_engine, text
 
 from app.core.config import settings
-from app.db.session import _engine_kwargs
+from app.core.database_url import normalize_database_url
 
 logger = logging.getLogger(__name__)
 
 _migration_lock = threading.Lock()
 _database_ready = False
+# Arbitrary constant identifying Gripper's migration lock.
+_ADVISORY_LOCK_KEY = 7_734_221_001
 
 
 def _backend_dir() -> str:
@@ -23,59 +34,47 @@ def _backend_dir() -> str:
 
 
 def _normalize_db_url(url: str) -> str:
-    from app.core.database_url import normalize_database_url
-
     return normalize_database_url(url)
 
 
 def run_migrations() -> None:
-    raw_url = settings.SUPERUSER_DATABASE_URL or settings.DATABASE_URL
-    db_url = _normalize_db_url(raw_url)
+    if not settings.MIGRATION_DATABASE_URL:
+        raise RuntimeError("MIGRATION_DATABASE_URL is required to run migrations.")
+    db_url = _normalize_db_url(settings.MIGRATION_DATABASE_URL)
     backend_dir = _backend_dir()
 
-    logger.info("Running Alembic migrations (backend_dir=%s)", backend_dir)
+    from app.db.session import _engine_kwargs
 
+    engine = create_engine(db_url, **_engine_kwargs(db_url))
     try:
-        engine = create_engine(db_url, **_engine_kwargs(db_url))
-        with engine.begin() as conn:
-            conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+        with engine.connect() as lock_conn:
+            lock_conn.execute(text("SELECT pg_advisory_lock(:k)"), {"k": _ADVISORY_LOCK_KEY})
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+                cfg = Config(os.path.join(backend_dir, "alembic.ini"))
+                cfg.set_main_option("script_location", os.path.join(backend_dir, "migrations"))
+                # ConfigParser treats % as interpolation; URL-encoded passwords need doubling.
+                cfg.set_main_option("sqlalchemy.url", db_url.replace("%", "%%"))
+                command.upgrade(cfg, "head")
+                logger.info("Alembic migrations completed successfully")
+            finally:
+                lock_conn.execute(text("SELECT pg_advisory_unlock(:k)"), {"k": _ADVISORY_LOCK_KEY})
+    finally:
         engine.dispose()
-    except Exception as exc:
-        logger.warning("Could not ensure pgvector extension: %s", exc)
-
-    cfg = Config(os.path.join(backend_dir, "alembic.ini"))
-    cfg.set_main_option("script_location", os.path.join(backend_dir, "migrations"))
-    # ConfigParser treats % as interpolation; URL-encoded passwords need doubling.
-    cfg.set_main_option("sqlalchemy.url", db_url.replace("%", "%%"))
-
-    try:
-        command.upgrade(cfg, "head")
-        logger.info("Alembic migrations completed successfully")
-    except Exception as exc:
-        logger.exception("Alembic migration failed: %s", exc)
-        raise
 
 
 def ensure_database_ready() -> None:
-    """Run migrations and seed once per process (Vercel cold start)."""
+    """Run migrations once per process when AUTO_MIGRATE is enabled; otherwise no-op."""
     global _database_ready
-    if os.getenv("SKIP_DB_BOOTSTRAP", "").lower() in ("1", "true", "yes"):
-        _database_ready = True
-        return
     if _database_ready:
+        return
+    if not settings.AUTO_MIGRATE or os.getenv("SKIP_DB_BOOTSTRAP", "").lower() in ("1", "true", "yes"):
+        _database_ready = True
         return
 
     with _migration_lock:
         if _database_ready:
             return
-        try:
-            run_migrations()
-        except Exception as exc:
-            logger.exception("Database migration failed: %s", exc)
-            raise
-
-        from app.db.seed import seed_default_data
-
-        seed_default_data()
+        run_migrations()
         _database_ready = True
-        logger.info("Database migrations and seed completed")

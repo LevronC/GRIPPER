@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy import create_engine
-from sqlalchemy.exc import IntegrityError, OperationalError, ProgrammingError
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr, validator
 import uuid
 import random
@@ -13,9 +13,8 @@ import jwt
 
 import logging
 
-from app.db.migrate import ensure_database_ready
-from app.db.session import _engine_kwargs
-from app.core.database_url import database_url_error_hint, normalize_database_url
+from app.api.deps import resolve_user_by_email
+from app.db.session import get_db, set_tenant
 from app import models
 from app.core import security
 from app.core.config import settings
@@ -31,21 +30,18 @@ reusable_oauth2 = HTTPBearer(auto_error=False)
 SELF_REGISTRATION_ROLES = ["analyst", "sector_lead", "faculty"]
 ALL_ROLES = ["analyst", "sector_lead", "pm", "faculty", "trustee", "admin"]
 
-_super_engine = None
-_super_session_factory = None
 
-
-def _normalize_url(url: str) -> str:
-    return normalize_database_url(url)
-
-
-def get_superuser_session():
-    global _super_engine, _super_session_factory
-    if _super_engine is None:
-        url = _normalize_url(settings.SUPERUSER_DATABASE_URL)
-        _super_engine = create_engine(url, **_engine_kwargs(url))
-        _super_session_factory = sessionmaker(bind=_super_engine)
-    return _super_session_factory()
+def _load_user_by_email(db: Session, email: str) -> Optional[models.User]:
+    """
+    Resolve the user's institution through the SECURITY DEFINER lookup, bind the
+    session to it, then read the full row under RLS. No RLS-bypassing connection.
+    """
+    resolved = resolve_user_by_email(db, email)
+    if not resolved:
+        return None
+    user_id, institution_id = resolved
+    set_tenant(db, institution_id)
+    return db.execute(select(models.User).where(models.User.id == user_id)).scalar_one_or_none()
 
 class UserRegister(BaseModel):
     email: EmailStr
@@ -74,15 +70,7 @@ class Token(BaseModel):
     graduation_year: Optional[int] = None
 
 @router.post("/register", status_code=201)
-def register_user(user_in: UserRegister):
-    try:
-        ensure_database_ready()
-    except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Database setup failed: {exc}",
-        ) from exc
-
+def register_user(user_in: UserRegister, db: Session = Depends(get_db)):
     if user_in.role not in SELF_REGISTRATION_ROLES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -91,64 +79,34 @@ def register_user(user_in: UserRegister):
                 "Contact your institution administrator to be assigned a privileged role."
             ),
         )
+    if resolve_user_by_email(db, user_in.email):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A user with this email is already registered.",
+        )
+    institution = db.get(models.Institution, user_in.institution_id)
+    if not institution:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Specified institution not found.")
 
-    hashed_pwd = security.get_password_hash(user_in.password)
     v_code = "".join(random.choices(string.digits, k=6))
-
+    set_tenant(db, institution.id)
+    db_user = models.User(
+        email=user_in.email,
+        hashed_password=security.get_password_hash(user_in.password),
+        institution_id=institution.id,
+        role=user_in.role,
+        graduation_year=user_in.graduation_year,
+        is_verified=False,
+        verification_code=v_code,
+    )
+    db.add(db_user)
     try:
-        with get_superuser_session() as super_db:
-            existing_user = super_db.query(models.User).filter(models.User.email == user_in.email).first()
-            if existing_user:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="A user with this email is already registered.",
-                )
-
-            institution = (
-                super_db.query(models.Institution)
-                .filter(models.Institution.id == user_in.institution_id)
-                .first()
-            )
-            if not institution:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Specified institution not found. Run database migrations/seeding first.",
-                )
-
-            db_user = models.User(
-                email=user_in.email,
-                hashed_password=hashed_pwd,
-                institution_id=user_in.institution_id,
-                role=user_in.role,
-                graduation_year=user_in.graduation_year,
-                is_verified=False,
-                verification_code=v_code,
-            )
-            super_db.add(db_user)
-            super_db.commit()
-            super_db.refresh(db_user)
-    except HTTPException:
-        raise
+        db.flush()
     except IntegrityError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="A user with this email is already registered.",
         )
-    except OperationalError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=database_url_error_hint(settings.SUPERUSER_DATABASE_URL, exc),
-        ) from exc
-    except ProgrammingError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=database_url_error_hint(settings.SUPERUSER_DATABASE_URL, exc),
-        ) from exc
-    except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Registration failed: {exc}",
-        ) from exc
 
     if settings.DEBUG_PRINT_CODES:
         logger.warning(
@@ -167,16 +125,9 @@ def register_user(user_in: UserRegister):
     }
 
 @router.post("/login", response_model=Token)
-def login_user(credentials: UserLogin):
-    try:
-        with get_superuser_session() as super_db:
-            db_user = super_db.query(models.User).filter(models.User.email == credentials.email).first()
-    except OperationalError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=database_url_error_hint(settings.SUPERUSER_DATABASE_URL, exc),
-        ) from exc
-    
+def login_user(credentials: UserLogin, db: Session = Depends(get_db)):
+    db_user = _load_user_by_email(db, credentials.email)
+
     if not db_user or not db_user.hashed_password:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -262,15 +213,13 @@ class ResetPasswordRequest(BaseModel):
         return v
 
 @router.post("/forgot-password")
-def forgot_password(payload: ForgotPasswordRequest):
+def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db)):
     reset_code = None
-    with get_superuser_session() as super_db:
-        user = super_db.query(models.User).filter(models.User.email == payload.email).first()
-        # Do not reveal whether the email exists — always return the same response.
-        if user and user.is_verified:
-            reset_code = "".join(random.choices(string.digits, k=6))
-            user.verification_code = reset_code
-            super_db.commit()
+    user = _load_user_by_email(db, payload.email)
+    # Do not reveal whether the email exists — always return the same response.
+    if user and user.is_verified:
+        reset_code = "".join(random.choices(string.digits, k=6))
+        user.verification_code = reset_code
 
     if reset_code:
         if settings.DEBUG_PRINT_CODES:
@@ -286,9 +235,9 @@ def forgot_password(payload: ForgotPasswordRequest):
     }
 
 @router.post("/reset-password", response_model=Token)
-def reset_password(payload: ResetPasswordRequest):
-    with get_superuser_session() as super_db:
-        user = super_db.query(models.User).filter(models.User.email == payload.email).first()
+def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db)):
+    if True:
+        user = _load_user_by_email(db, payload.email)
         if not user:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
         if not user.is_verified:
@@ -301,8 +250,7 @@ def reset_password(payload: ResetPasswordRequest):
 
         user.hashed_password = security.get_password_hash(payload.new_password)
         user.verification_code = None
-        super_db.commit()
-        super_db.refresh(user)
+        db.flush()
 
         token = security.create_access_token(subject=user.id)
         return {
@@ -316,9 +264,9 @@ def reset_password(payload: ResetPasswordRequest):
         }
 
 @router.post("/verify")
-def verify_email(payload: VerifyEmail):
-    with get_superuser_session() as super_db:
-        user = super_db.query(models.User).filter(models.User.email == payload.email).first()
+def verify_email(payload: VerifyEmail, db: Session = Depends(get_db)):
+    if True:
+        user = _load_user_by_email(db, payload.email)
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         
@@ -330,6 +278,5 @@ def verify_email(payload: VerifyEmail):
             
         user.is_verified = True
         user.verification_code = None
-        super_db.commit()
         
     return {"message": "Email verified successfully. You can now login."}

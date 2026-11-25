@@ -3,7 +3,7 @@ from datetime import datetime
 import logging
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
-from sqlalchemy import select, and_, text
+from sqlalchemy import select, and_
 
 from app.models import Portfolio, Holding, IPSRule, GovernanceEvent
 from app.services.governance.rules import (
@@ -29,12 +29,16 @@ def evaluate_portfolio_compliance(
     """
     # 1. Fetch active rules for the institution
     rules_stmt = select(IPSRule).filter(
-        and_(IPSRule.institution_id == institution_id, IPSRule.active == True)
+        and_(IPSRule.institution_id == institution_id, IPSRule.active.is_(True))
     )
     rules = db.execute(rules_stmt).scalars().all()
     
     # 2. Fetch portfolio holdings
-    holdings_stmt = select(Holding).filter(Holding.portfolio_id == portfolio_id)
+    holdings_stmt = (
+        select(Holding)
+        .join(Portfolio, Portfolio.id == Holding.portfolio_id)
+        .filter(Holding.portfolio_id == portfolio_id, Portfolio.institution_id == institution_id)
+    )
     holdings = db.execute(holdings_stmt).scalars().all()
     
     if not holdings:
@@ -69,7 +73,8 @@ def evaluate_portfolio_compliance(
     active_events_stmt = select(GovernanceEvent).filter(
         and_(
             GovernanceEvent.portfolio_id == portfolio_id,
-            GovernanceEvent.resolved == False
+            GovernanceEvent.institution_id == institution_id,
+            GovernanceEvent.resolved.is_(False),
         )
     )
     db_active_events = db.execute(active_events_stmt).scalars().all()
@@ -140,11 +145,9 @@ def evaluate_portfolio_compliance(
             active_results.append(new_event)
             logger.warning(f"[Governance] New breach detected: {v['message']}")
             
+    # Tenant context is re-applied automatically when the next transaction begins
+    # (TenantSession after_begin hook), so reading created_at after commit is safe.
     db.commit()
-    
-    # Re-set transaction-scoped RLS context after commit because SET LOCAL is cleared.
-    # This is required so that we can read back the objects (e.g. created_at) for the return list.
-    db.execute(text("SET LOCAL app.current_institution_id = :inst_id"), {"inst_id": str(institution_id)})
 
     # Format return list
     return [
@@ -178,7 +181,7 @@ def simulate_portfolio_compliance(
     """
     # 1. Fetch active rules
     rules_stmt = select(IPSRule).filter(
-        and_(IPSRule.institution_id == institution_id, IPSRule.active == True)
+        and_(IPSRule.institution_id == institution_id, IPSRule.active.is_(True))
     )
     rules = db.execute(rules_stmt).scalars().all()
     

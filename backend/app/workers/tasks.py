@@ -18,9 +18,7 @@ import logging
 import os
 import uuid
 
-from sqlalchemy import text
-
-from app.db.session import SessionLocal
+from app.db.session import SessionLocal, set_tenant
 from app.services.ingestion.pipeline import ingest_document
 
 logger = logging.getLogger(__name__)
@@ -57,12 +55,9 @@ def process_document_ingestion(
 
     db = SessionLocal()
     try:
-        # Use SET LOCAL so the institution context is scoped to this transaction
-        # and does not leak to subsequent connections on the same pool slot.
-        db.execute(
-            text("SET LOCAL app.current_institution_id = :id"),
-            {"id": str(institution_id)},
-        )
+        # Tenant context is applied with transaction-local set_config() at the start
+        # of every transaction on this session, so it never leaks to pooled connections.
+        set_tenant(db, institution_id)
         chunks_count = ingest_document(db, report_id, effective_path, institution_id)
         logger.info("Worker: ingested report %s — %d chunks", report_id_str, chunks_count)
         return chunks_count

@@ -7,45 +7,39 @@ from typing import List, Optional
 from fastapi import FastAPI, Depends, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
-from fastapi.responses import JSONResponse
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-import jwt
-from jwt import PyJWTError as JWTError
-from pydantic import BaseModel
-from sqlalchemy import text
+from pydantic import BaseModel, Field
+from sqlalchemy import select, text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
-from app.api.auth import router as auth_router, get_superuser_session
-from app.api.deps import get_current_user, RoleChecker
+from app.api.auth import router as auth_router
+from app.api.deps import CurrentUser, RoleChecker
+from app.api.tenancy import require_portfolio
 from app.core.rbac import (
     ADMIN_ROLES,
     ALL_ROLES as _ALL_ROLES,
-    COMPLIANCE_ROLES,
     HOLDINGS_WRITE_ROLES,
     PORTFOLIO_WRITE_ROLES,
     READ_ROLES,
 )
-from app.core.config import settings
-from app.core.database_url import database_url_error_hint
 from app import models
+from app.core.config import settings
 from app.api.endpoints import router as api_router
 from app.db.migrate import ensure_database_ready
-from app.db.seed import DEFAULT_INSTITUTIONS
-from app.db.session import get_db, engine
+from app.db.session import database_role_report, engine, get_db
 
 logger = logging.getLogger(__name__)
 
 SWAGGER_OPENAPI_URL = os.getenv("SWAGGER_OPENAPI_URL", "/openapi.json")
-public_bearer = HTTPBearer(auto_error=False)
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    # No-op unless AUTO_MIGRATE=true (migrations are normally a deploy step).
     try:
         ensure_database_ready()
     except Exception as exc:
-        logger.warning("Database bootstrap skipped or failed (%s)", exc)
+        logger.error("Database bootstrap failed (%s)", type(exc).__name__)
     yield
 
 
@@ -120,10 +114,12 @@ def health_check():
 
 @app.get("/health/db")
 def health_db_check():
-    """Lightweight DB connectivity check — reuses the existing engine pool."""
+    """
+    Connectivity + runtime-role safety. Returns 503 when the runtime role could
+    bypass row-level security. Exposes booleans only (no role or table names).
+    """
     try:
         with engine.connect() as conn:
-            conn.execute(text("SELECT 1"))
             users_exists = conn.execute(
                 text(
                     "SELECT EXISTS ("
@@ -132,165 +128,105 @@ def health_db_check():
                     ")"
                 )
             ).scalar()
-        return {
-            "status": "ok",
-            "database": "connected",
-            "schema_ready": bool(users_exists),
-        }
+            report = database_role_report(conn) if users_exists else None
     except OperationalError as exc:
-        raise HTTPException(
-            status_code=503,
-            detail=database_url_error_hint(settings.DATABASE_URL, exc),
-        ) from exc
+        logger.error("Health check: database unavailable (%s)", type(exc).__name__)
+        raise HTTPException(status_code=503, detail="Database unavailable.") from exc
+    body = {
+        "status": "ok",
+        "database": "connected",
+        "schema_ready": bool(users_exists),
+        "rls_enforced": bool(report and report["rls_enforced"]),
+    }
+    if not body["schema_ready"] or not body["rls_enforced"]:
+        raise HTTPException(status_code=503, detail=body)
+    return body
 
 
 # ── Institutions ──────────────────────────────────────────────────────────────
+
+def _institution_json(i: models.Institution) -> dict:
+    return {
+        "id": str(i.id),
+        "name": i.name,
+        "slug": i.slug,
+        "tier": i.tier,
+        "created_at": i.created_at,
+    }
+
 
 @app.post("/institutions")
 def create_institution(
     name: str,
     slug: str,
     db: Session = Depends(get_db),
-    current_user=Depends(RoleChecker(ADMIN_ROLES)),
+    current_user: CurrentUser = Depends(RoleChecker(ADMIN_ROLES)),
 ):
     inst = models.Institution(name=name, slug=slug)
     db.add(inst)
-    db.commit()
-    db.refresh(inst)
-    return {
-        "id": str(inst.id),
-        "name": inst.name,
-        "slug": inst.slug,
-        "tier": inst.tier,
-        "created_at": inst.created_at,
-    }
+    db.flush()
+    return _institution_json(inst)
 
 
 @app.get("/institutions")
-def list_institutions(
-    token_creds: Optional[HTTPAuthorizationCredentials] = Depends(public_bearer),
-):
-    """
-    Returns the list of institutions.
-    Authenticated requests receive only their own institution.
-    Unauthenticated requests receive all institutions (needed for the sign-in form).
-    """
-    institution_filter_id = None
-    if token_creds:
-        try:
-            payload = jwt.decode(
-                token_creds.credentials,
-                settings.SECRET_KEY,
-                algorithms=[settings.ALGORITHM],
-            )
-            user_id = payload.get("sub")
-            if user_id:
-                with get_superuser_session() as db:
-                    user = db.query(models.User).filter(
-                        models.User.id == uuid.UUID(user_id)
-                    ).first()
-                    if user:
-                        institution_filter_id = user.institution_id
-        except (JWTError, ValueError):
-            pass
-
-    try:
-        with get_superuser_session() as db:
-            query = db.query(models.Institution)
-            if institution_filter_id:
-                query = query.filter(models.Institution.id == institution_filter_id)
-            else:
-                query = query.order_by(models.Institution.name)
-            institutions = query.all()
-
-            if institutions:
-                return [
-                    {
-                        "id": str(i.id),
-                        "name": i.name,
-                        "slug": i.slug,
-                        "tier": i.tier,
-                        "created_at": i.created_at,
-                    }
-                    for i in institutions
-                ]
-    except Exception:
-        pass
-
-    fallback = DEFAULT_INSTITUTIONS
-    if institution_filter_id:
-        fallback = [item for item in fallback if item["id"] == institution_filter_id]
-
-    return [
-        {"id": str(item["id"]), "name": item["name"], "slug": item["slug"], "tier": item["tier"]}
-        for item in fallback
-    ]
+def list_institutions(db: Session = Depends(get_db)):
+    """Public list used by the sign-in form (institution names only)."""
+    institutions = db.execute(
+        select(models.Institution).order_by(models.Institution.name)
+    ).scalars().all()
+    return [_institution_json(i) for i in institutions]
 
 
 # ── Portfolios ────────────────────────────────────────────────────────────────
+
+def _portfolio_json(p: models.Portfolio) -> dict:
+    return {
+        "id": str(p.id),
+        "name": p.name,
+        "strategy_type": p.strategy_type,
+        "institution_id": str(p.institution_id),
+    }
+
 
 @app.post("/portfolios")
 def create_portfolio(
     name: str,
     strategy_type: str,
     db: Session = Depends(get_db),
-    current_user=Depends(RoleChecker(PORTFOLIO_WRITE_ROLES)),
+    current_user: CurrentUser = Depends(RoleChecker(PORTFOLIO_WRITE_ROLES)),
 ):
-    res = db.execute(text("SHOW app.current_institution_id")).scalar()
-    if not res or res == "":
-        raise HTTPException(
-            status_code=400,
-            detail="X-Institution-ID header or token is required to create a portfolio",
-        )
     portfolio = models.Portfolio(
-        institution_id=uuid.UUID(res),
+        institution_id=current_user.institution_id,
         name=name,
         strategy_type=strategy_type,
     )
     db.add(portfolio)
     db.commit()
-    db.refresh(portfolio)
-    return {
-        "id": str(portfolio.id),
-        "name": portfolio.name,
-        "strategy_type": portfolio.strategy_type,
-        "institution_id": str(portfolio.institution_id),
-    }
+    db.refresh(portfolio)  # new transaction: tenant context re-applied by after_begin hook
+    return _portfolio_json(portfolio)
 
 
 @app.get("/portfolios")
 def list_portfolios(
     db: Session = Depends(get_db),
-    current_user=Depends(RoleChecker(READ_ROLES)),
+    current_user: CurrentUser = Depends(RoleChecker(READ_ROLES)),
 ):
-    res = db.execute(text("SHOW app.current_institution_id")).scalar()
-    if not res or res == "":
-        raise HTTPException(
-            status_code=400,
-            detail="X-Institution-ID header or token is required to retrieve portfolios",
-        )
-    portfolios = db.query(models.Portfolio).all()
-    return [
-        {
-            "id": str(p.id),
-            "name": p.name,
-            "strategy_type": p.strategy_type,
-            "institution_id": str(p.institution_id),
-        }
-        for p in portfolios
-    ]
+    portfolios = db.execute(
+        select(models.Portfolio).where(models.Portfolio.institution_id == current_user.institution_id)
+    ).scalars().all()
+    return [_portfolio_json(p) for p in portfolios]
 
 
 @app.get("/portfolios/{portfolio_id}/holdings")
 def list_portfolio_holdings(
     portfolio_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_user=Depends(RoleChecker(READ_ROLES)),
+    current_user: CurrentUser = Depends(RoleChecker(READ_ROLES)),
 ):
-    res = db.execute(text("SHOW app.current_institution_id")).scalar()
-    if not res or res == "":
-        raise HTTPException(status_code=400, detail="X-Institution-ID header or token is required")
-    holdings = db.query(models.Holding).filter(models.Holding.portfolio_id == portfolio_id).all()
+    require_portfolio(db, portfolio_id, current_user.institution_id)
+    holdings = db.execute(
+        select(models.Holding).where(models.Holding.portfolio_id == portfolio_id)
+    ).scalars().all()
     return [
         {
             "id": str(h.id),
@@ -317,11 +253,9 @@ def update_portfolio_holdings(
     portfolio_id: uuid.UUID,
     holdings_data: List[HoldingUpdate],
     db: Session = Depends(get_db),
-    current_user=Depends(RoleChecker(HOLDINGS_WRITE_ROLES)),
+    current_user: CurrentUser = Depends(RoleChecker(HOLDINGS_WRITE_ROLES)),
 ):
-    res = db.execute(text("SHOW app.current_institution_id")).scalar()
-    if not res or res == "":
-        raise HTTPException(status_code=400, detail="X-Institution-ID header or token is required")
+    require_portfolio(db, portfolio_id, current_user.institution_id)
     db.query(models.Holding).filter(models.Holding.portfolio_id == portfolio_id).delete()
     new_holdings = [
         models.Holding(
@@ -341,12 +275,11 @@ def update_portfolio_holdings(
 @app.get("/ips_rules")
 def list_ips_rules(
     db: Session = Depends(get_db),
-    current_user=Depends(RoleChecker(READ_ROLES)),
+    current_user: CurrentUser = Depends(RoleChecker(READ_ROLES)),
 ):
-    res = db.execute(text("SHOW app.current_institution_id")).scalar()
-    if not res or res == "":
-        raise HTTPException(status_code=400, detail="X-Institution-ID header or token is required")
-    rules = db.query(models.IPSRule).all()
+    rules = db.execute(
+        select(models.IPSRule).where(models.IPSRule.institution_id == current_user.institution_id)
+    ).scalars().all()
     return [
         {
             "id": str(r.id),
@@ -362,45 +295,37 @@ def list_ips_rules(
 # ── User management (admin only) ──────────────────────────────────────────────
 
 class RoleUpdate(BaseModel):
-    role: str
+    role: str = Field(..., max_length=50)
 
 
 @app.patch("/users/{user_id}/role")
 def update_user_role(
     user_id: uuid.UUID,
     payload: RoleUpdate,
-    current_user=Depends(RoleChecker(ADMIN_ROLES)),
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(RoleChecker(ADMIN_ROLES)),
 ):
     """
-    Assigns a new role to a user within the same institution.
-    Admin-only. This is the only way to grant privileged roles (pm, trustee, admin)
-    since self-registration is limited to analyst/sector_lead/faculty.
+    Assigns a new role to a user within the admin's own institution. Runs under the
+    admin's RLS context, so users of other institutions are invisible (404).
     """
     if payload.role not in _ALL_ROLES:
         raise HTTPException(
             status_code=400,
             detail=f"Invalid role. Must be one of: {', '.join(_ALL_ROLES)}",
         )
-
-    with get_superuser_session() as db:
-        target = db.query(models.User).filter(models.User.id == user_id).first()
-
-        if not target:
-            raise HTTPException(status_code=404, detail="User not found")
-
-        if str(target.institution_id) != str(current_user.institution_id):
-            raise HTTPException(
-                status_code=403,
-                detail="You may only manage users within your own institution",
-            )
-
-        if target.id == current_user.id and payload.role != "admin":
-            raise HTTPException(
-                status_code=400,
-                detail="Admins cannot demote themselves to prevent lockouts",
-            )
-
-        target.role = payload.role
-        db.commit()
-
+    target = db.execute(
+        select(models.User).where(
+            models.User.id == user_id,
+            models.User.institution_id == current_user.institution_id,
+        )
+    ).scalar_one_or_none()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    if target.id == current_user.id and payload.role != "admin":
+        raise HTTPException(
+            status_code=400,
+            detail="Admins cannot demote themselves to prevent lockouts",
+        )
+    target.role = payload.role
     return {"user_id": str(user_id), "role": payload.role}

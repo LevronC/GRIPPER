@@ -24,7 +24,8 @@ from app.core.database_url import normalize_database_url
 
 # Set DB URL dynamically from env if available
 db_url = normalize_database_url(
-    os.getenv("SUPERUSER_DATABASE_URL")
+    os.getenv("MIGRATION_DATABASE_URL")
+    or os.getenv("SUPERUSER_DATABASE_URL")
     or os.getenv(
         "DATABASE_URL",
         "postgresql://postgres:postgres@localhost:5432/gripper",

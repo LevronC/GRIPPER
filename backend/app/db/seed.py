@@ -46,7 +46,7 @@ DEMO_USER = {
 
 def seed_default_data() -> None:
     try:
-        url = normalize_database_url(settings.SUPERUSER_DATABASE_URL)
+        url = normalize_database_url(settings.MIGRATION_DATABASE_URL)
         engine = create_engine(url, **_engine_kwargs(url))
         Session = sessionmaker(bind=engine)
     except Exception as exc:

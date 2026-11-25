@@ -1,3 +1,4 @@
+import hmac
 import logging
 import os
 import uuid
@@ -16,13 +17,14 @@ from app.core.config import settings
 from app.core.redis_client import get_redis_client
 from app.core.blob import store_upload
 from app.core.errors import internal_error
-from app.db.session import get_db
+from app.db.session import SessionLocal, get_db, set_tenant
 from app import models
 from app.schemas.document import SemanticSearchRequest
 from app.services.retrieval.searcher import search_documents
 from app.services.governance.evaluator import evaluate_portfolio_compliance, simulate_portfolio_compliance
 from app.services.governance.explain import generate_violation_explanation
-from app.api.deps import RoleChecker
+from app.api.deps import CurrentUser, RoleChecker
+from app.api.tenancy import require_governance_event, require_portfolio
 from app.core.rbac import COMPLIANCE_ROLES, READ_ROLES, RESEARCH_ROLES, SIMULATION_ROLES
 
 logger = logging.getLogger(__name__)
@@ -61,7 +63,7 @@ def upload_document(
     recommendation: str = Form(...),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user=Depends(RoleChecker(RESEARCH_ROLES)),
+    current_user: CurrentUser = Depends(RoleChecker(RESEARCH_ROLES)),
 ):
     """
     Accepts PDF uploads, validates file size and signature, stores the file
@@ -71,13 +73,7 @@ def upload_document(
     On Vercel, ingestion is processed by the /cron/process-documents endpoint
     (runs every minute via Vercel Cron) rather than by a persistent RQ worker.
     """
-    res = db.execute(text("SHOW app.current_institution_id")).scalar()
-    if not res or res == "":
-        raise HTTPException(
-            status_code=400,
-            detail="X-Institution-ID header or token is required to upload documents",
-        )
-    institution_id = uuid.UUID(res)
+    institution_id = current_user.institution_id
 
     # Input validation
     clean_sector = sector.strip()
@@ -107,8 +103,8 @@ def upload_document(
             raise HTTPException(status_code=400, detail="Invalid PDF file signature.")
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to read upload file: {e}")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Failed to read upload file.")
 
     report_id = uuid.uuid4()
     filename = f"{report_id}.pdf"
@@ -128,7 +124,7 @@ def upload_document(
         recommendation=clean_rec,
         status="pending",
         file_path=file_ref,
-        uploaded_by=current_user.id if current_user else None,
+        uploaded_by=current_user.id,
     )
     db.add(report)
     db.commit()
@@ -161,7 +157,7 @@ def upload_document(
     from app.services.ingestion.pipeline import ingest_document as _ingest
     logger.info("Processing document %s synchronously (no Redis queue)", report_id)
     try:
-        chunks = _ingest(db, report_id, file_ref, institution_id)
+        chunks = _ingest(db, report_id, file_ref, institution_id)  # tenant re-applied per transaction
         return {
             "report_id": str(report_id),
             "status": "processed",
@@ -169,11 +165,11 @@ def upload_document(
             "message": "Document ingested.",
         }
     except Exception as e:
-        logger.error("Synchronous ingestion failed for report %s: %s", report_id, e)
+        logger.error("Synchronous ingestion failed for report %s: %s", report_id, type(e).__name__)
         return {
             "report_id": str(report_id),
             "status": "failed",
-            "message": f"Ingestion failed: {e}",
+            "message": "Ingestion failed. The document is marked as failed.",
         }
 
 
@@ -182,16 +178,12 @@ def upload_document(
 @router.get("/documents")
 def list_documents(
     db: Session = Depends(get_db),
-    current_user=Depends(RoleChecker(READ_ROLES)),
+    current_user: CurrentUser = Depends(RoleChecker(READ_ROLES)),
     page: int = 1,
     page_size: int = 20,
 ):
-    res = db.execute(text("SHOW app.current_institution_id")).scalar()
-    if not res or res == "":
-        raise HTTPException(status_code=400, detail="X-Institution-ID header or token is required to view documents")
-
     page = max(1, page)
-    page_size = min(page_size, 100)
+    page_size = max(1, min(page_size, 100))
     offset = (page - 1) * page_size
 
     # Select only the columns this endpoint actually returns — never include
@@ -206,9 +198,11 @@ def list_documents(
         models.ResearchReport.created_at,
     ]
     try:
-        total = db.query(func.count(models.ResearchReport.id)).scalar()
+        own = models.ResearchReport.institution_id == current_user.institution_id
+        total = db.query(func.count(models.ResearchReport.id)).filter(own).scalar()
         rows = (
             db.query(*_cols)
+            .filter(own)
             .order_by(models.ResearchReport.created_at.desc())
             .offset(offset)
             .limit(page_size)
@@ -241,15 +235,10 @@ def list_documents(
 def semantic_search(
     request: SemanticSearchRequest,
     db: Session = Depends(get_db),
-    current_user=Depends(RoleChecker(READ_ROLES)),
+    current_user: CurrentUser = Depends(RoleChecker(RESEARCH_ROLES)),
 ):
-    res = db.execute(text("SHOW app.current_institution_id")).scalar()
-    if not res or res == "":
-        raise HTTPException(status_code=400, detail="X-Institution-ID header or token is required to perform semantic search")
-
-    institution_id = uuid.UUID(res)
     try:
-        results = search_documents(db, request.query, institution_id, request.limit)
+        results = search_documents(db, request.query, current_user.institution_id, request.limit)
         return {"query": request.query, "results": results}
     except Exception as e:
         raise HTTPException(status_code=500, **internal_error(e, "semantic_search"))
@@ -261,12 +250,10 @@ def semantic_search(
 def evaluate_portfolio(
     portfolio_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_user=Depends(RoleChecker(COMPLIANCE_ROLES)),
+    current_user: CurrentUser = Depends(RoleChecker(COMPLIANCE_ROLES)),
 ):
-    res = db.execute(text("SHOW app.current_institution_id")).scalar()
-    if not res or res == "":
-        raise HTTPException(status_code=400, detail="X-Institution-ID header or token is required to run compliance evaluations")
-    institution_id = uuid.UUID(res)
+    institution_id = current_user.institution_id
+    require_portfolio(db, portfolio_id, institution_id)
     try:
         violations = evaluate_portfolio_compliance(db, portfolio_id, institution_id)
         return {"portfolio_id": str(portfolio_id), "violations": violations}
@@ -279,17 +266,16 @@ def get_portfolio_violations(
     portfolio_id: uuid.UUID,
     resolved: bool = False,
     db: Session = Depends(get_db),
-    current_user=Depends(RoleChecker(READ_ROLES)),
+    current_user: CurrentUser = Depends(RoleChecker(READ_ROLES)),
 ):
-    res = db.execute(text("SHOW app.current_institution_id")).scalar()
-    if not res or res == "":
-        raise HTTPException(status_code=400, detail="X-Institution-ID header or token is required to read compliance events")
+    require_portfolio(db, portfolio_id, current_user.institution_id)
     try:
         stmt = (
             select(models.GovernanceEvent)
             .filter(
                 and_(
                     models.GovernanceEvent.portfolio_id == portfolio_id,
+                    models.GovernanceEvent.institution_id == current_user.institution_id,
                     models.GovernanceEvent.resolved == resolved,
                 )
             )
@@ -316,12 +302,10 @@ def get_portfolio_violations(
 def explain_violation(
     event_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_user=Depends(RoleChecker(COMPLIANCE_ROLES)),
+    current_user: CurrentUser = Depends(RoleChecker(COMPLIANCE_ROLES)),
 ):
-    res = db.execute(text("SHOW app.current_institution_id")).scalar()
-    if not res or res == "":
-        raise HTTPException(status_code=400, detail="X-Institution-ID header or token is required to explain compliance events")
-    institution_id = uuid.UUID(res)
+    institution_id = current_user.institution_id
+    require_governance_event(db, event_id, institution_id)
     try:
         explanation = generate_violation_explanation(db, event_id, institution_id)
         if "error" in explanation:
@@ -345,12 +329,10 @@ def simulate_portfolio(
     portfolio_id: uuid.UUID,
     holdings_data: List[HoldingSimulation],
     db: Session = Depends(get_db),
-    current_user=Depends(RoleChecker(SIMULATION_ROLES)),
+    current_user: CurrentUser = Depends(RoleChecker(SIMULATION_ROLES)),
 ):
-    res = db.execute(text("SHOW app.current_institution_id")).scalar()
-    if not res or res == "":
-        raise HTTPException(status_code=400, detail="X-Institution-ID header or token is required to run simulation")
-    institution_id = uuid.UUID(res)
+    institution_id = current_user.institution_id
+    require_portfolio(db, portfolio_id, institution_id)
     try:
         simulated_data = [h.model_dump() for h in holdings_data]
         violations = simulate_portfolio_compliance(db, portfolio_id, institution_id, simulated_data)
@@ -368,62 +350,45 @@ def simulate_portfolio(
 @router.get("/cron/process-documents")
 def cron_process_documents(request: Request):
     """
-    Internal endpoint invoked by Vercel Cron every minute.
+    Processes up to 5 pending documents. NOT scheduled automatically: vercel.json
+    defines no cron. It exists so an operator (or an external scheduler) can drain
+    pending uploads. Authenticated with `Authorization: Bearer {CRON_SECRET}`.
 
-    On Vercel, there is no persistent RQ worker process. This endpoint acts as
-    the document ingestion worker: it picks up to 5 pending ResearchReports that
-    have a file_path set, runs the full ingestion pipeline (parse → chunk →
-    embed → store), and updates report status.
-
-    Authentication: Vercel sends `Authorization: Bearer {CRON_SECRET}` with
-    every cron invocation. Requests without this header are rejected.
+    Pending jobs are listed through the SECURITY DEFINER function
+    app_pending_ingestion_jobs (identifiers only); each job then runs in its own
+    session bound to the report's institution, so RLS applies to all reads/writes.
     """
-    # Verify cron secret
     if not settings.CRON_SECRET:
         raise HTTPException(status_code=503, detail="CRON_SECRET is not configured.")
     auth_header = request.headers.get("authorization", "")
-    if auth_header != f"Bearer {settings.CRON_SECRET}":
+    if not hmac.compare_digest(auth_header.encode(), f"Bearer {settings.CRON_SECRET}".encode()):
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-    from app.api.auth import get_superuser_session
     from app.services.ingestion.pipeline import ingest_document
-    from app.db.session import SessionLocal
 
-    processed = []
-    errors = []
+    with SessionLocal() as db:
+        jobs = db.execute(
+            text("SELECT report_id, institution_id FROM app_pending_ingestion_jobs(5)")
+        ).all()
 
-    with get_superuser_session() as super_db:
-        pending = (
-            super_db.query(models.ResearchReport)
-            .filter(
-                models.ResearchReport.status == "pending",
-                models.ResearchReport.file_path.isnot(None),
-            )
-            .limit(5)
-            .all()
-        )
-        pending_snapshot = [
-            (str(r.id), r.file_path, str(r.institution_id)) for r in pending
-        ]
-
-    for report_id_str, file_path, institution_id_str in pending_snapshot:
-        report_id = uuid.UUID(report_id_str)
-        institution_id = uuid.UUID(institution_id_str)
-
-        db = SessionLocal()
-        try:
-            db.execute(
-                text("SET LOCAL app.current_institution_id = :id"),
-                {"id": institution_id_str},
-            )
-            chunks = ingest_document(db, report_id, file_path, institution_id)
-            processed.append({"report_id": report_id_str, "chunks": chunks})
-            logger.info("Cron ingested report %s: %d chunks", report_id_str, chunks)
-        except Exception as e:
-            logger.error("Cron ingestion failed for report %s: %s", report_id_str, e)
-            errors.append({"report_id": report_id_str, "error": str(e)})
-        finally:
-            db.close()
+    processed, errors = [], []
+    for report_id, institution_id in jobs:
+        with SessionLocal() as db:
+            set_tenant(db, institution_id)
+            report = db.execute(
+                select(models.ResearchReport).where(
+                    models.ResearchReport.id == report_id,
+                    models.ResearchReport.institution_id == institution_id,
+                )
+            ).scalar_one_or_none()
+            if report is None or not report.file_path:
+                continue
+            try:
+                chunks = ingest_document(db, report_id, report.file_path, institution_id)
+                processed.append({"report_id": str(report_id), "chunks": chunks})
+            except Exception as e:
+                logger.error("Cron ingestion failed for report %s: %s", report_id, type(e).__name__)
+                errors.append({"report_id": str(report_id)})
 
     return {
         "processed": len(processed),

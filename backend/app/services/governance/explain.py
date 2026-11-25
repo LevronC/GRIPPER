@@ -17,7 +17,9 @@ def generate_violation_explanation(
     and returns a structured explanation with retrieved precedents.
     """
     # 1. Fetch the governance event
-    stmt = select(GovernanceEvent).filter(GovernanceEvent.id == event_id)
+    stmt = select(GovernanceEvent).filter(
+        GovernanceEvent.id == event_id, GovernanceEvent.institution_id == institution_id
+    )
     event = db.execute(stmt).scalar_one_or_none()
     
     if not event:

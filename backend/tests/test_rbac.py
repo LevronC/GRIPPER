@@ -34,7 +34,7 @@ def test_role_checker_requires_authenticated_user():
     assert exc.value.status_code == 401
 
 
-def test_holdings_update_requires_pm_role(client: TestClient, make_user):
+def test_holdings_update_requires_pm_role(client: TestClient, make_user, no_db):
     user = make_user(role="analyst")
     app.dependency_overrides[get_current_user] = lambda: user
     try:
@@ -45,10 +45,10 @@ def test_holdings_update_requires_pm_role(client: TestClient, make_user):
         assert response.status_code == 403
         assert "Operation not permitted" in response.json()["detail"]
     finally:
-        app.dependency_overrides.clear()
+        app.dependency_overrides.pop(get_current_user, None)
 
 
-def test_simulate_requires_pm_role(client: TestClient, make_user):
+def test_simulate_requires_pm_role(client: TestClient, make_user, no_db):
     user = make_user(role="faculty")
     app.dependency_overrides[get_current_user] = lambda: user
     try:
@@ -61,24 +61,10 @@ def test_simulate_requires_pm_role(client: TestClient, make_user):
         app.dependency_overrides.clear()
 
 
-def test_simulate_allows_pm(client: TestClient, make_user, monkeypatch):
+def test_simulate_allows_pm(client: TestClient, make_user, no_db, monkeypatch):
     user = make_user(role="pm")
-
-    class FakeResult:
-        def scalar(self):
-            return str(user.institution_id)
-
-    class FakeDb:
-        def execute(self, *_args, **_kwargs):
-            return FakeResult()
-
-    def fake_get_db():
-        yield FakeDb()
-
-    from app.db.session import get_db
-
     app.dependency_overrides[get_current_user] = lambda: user
-    app.dependency_overrides[get_db] = fake_get_db
+    monkeypatch.setattr("app.api.endpoints.require_portfolio", lambda *_a, **_k: None)
     monkeypatch.setattr(
         "app.api.endpoints.simulate_portfolio_compliance",
         lambda *_args, **_kwargs: [],
@@ -90,4 +76,36 @@ def test_simulate_allows_pm(client: TestClient, make_user, monkeypatch):
         )
         assert response.status_code == 200
     finally:
-        app.dependency_overrides.clear()
+        app.dependency_overrides.pop(get_current_user, None)
+
+
+@pytest.mark.parametrize("role, expected", [
+    ("analyst", 200), ("sector_lead", 200), ("pm", 200), ("admin", 200),
+    ("faculty", 403), ("trustee", 403),
+])
+def test_semantic_search_restricted_to_research_roles(client, make_user, no_db, monkeypatch, role, expected):
+    user = make_user(role=role)
+    app.dependency_overrides[get_current_user] = lambda: user
+    monkeypatch.setattr("app.api.endpoints.search_documents", lambda *_a, **_k: [])
+    try:
+        response = client.post("/search/semantic", json={"query": "liquidity", "limit": 3})
+        assert response.status_code == expected
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+
+
+def test_unauthenticated_requests_rejected(client, no_db):
+    for method, path in [
+        ("get", "/portfolios"),
+        ("get", f"/portfolios/{uuid.uuid4()}/holdings"),
+        ("post", "/search/semantic"),
+        ("get", "/documents"),
+    ]:
+        kwargs = {"json": {"query": "x"}} if method == "post" else {}
+        response = getattr(client, method)(path, **kwargs)
+        assert response.status_code == 401, (method, path)
+
+
+def test_invalid_token_rejected(client, no_db):
+    response = client.get("/portfolios", headers={"Authorization": "Bearer not-a-jwt"})
+    assert response.status_code == 401
