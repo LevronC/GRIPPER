@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased] — portfolio-hardening (Phase 4)
+
+### Added
+- Labeled synthetic retrieval corpus, metric functions, and local evaluation scripts
+  for full-text vs vector vs hybrid search, search latency, and explanation fallback.
+  Results are measurements from those scripts. Hash embeddings are not semantic
+  quality. See docs/EVALUATION.md.
+
 ## [Unreleased] — portfolio-hardening (Phase 3)
 
 ### Added

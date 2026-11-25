@@ -1,0 +1,80 @@
+{
+  "synthetic": true,
+  "semantic_claim": false,
+  "note": "Hash embeddings. Latency only. p99 on a few hundred samples is unstable.",
+  "chunks": 50000,
+  "queries": 200,
+  "seed": 42,
+  "limit": 5,
+  "warmup_excluded": 20,
+  "concurrency": 4,
+  "load_seconds": 12.166,
+  "cold_e2e_ms": 717.9210000031162,
+  "warm_end_to_end": {
+    "n": 200,
+    "mean_ms": 375.20834580922383,
+    "p50_ms": 275.7838539837394,
+    "p95_ms": 679.8728431007474,
+    "p99_ms": 693.4786270896437,
+    "min_ms": 243.7220420106314,
+    "max_ms": 699.519791000057
+  },
+  "warm_db_vector": {
+    "n": 200,
+    "mean_ms": 21.691987489757594,
+    "p50_ms": 21.623062493745238,
+    "p95_ms": 22.636794092250057,
+    "p99_ms": 24.382882920326622,
+    "min_ms": 20.04245901480317,
+    "max_ms": 30.121957999654114
+  },
+  "warm_db_full_text": {
+    "n": 200,
+    "mean_ms": 255.64779186141095,
+    "p50_ms": 251.35814599343576,
+    "p95_ms": 282.8993348244694,
+    "p99_ms": 293.39816834311927,
+    "min_ms": 236.60658299922943,
+    "max_ms": 296.75708297872916
+  },
+  "concurrent": {
+    "n": 200,
+    "mean_ms": 531.3968572790327,
+    "p50_ms": 508.2402710104361,
+    "p95_ms": 722.4524847959399,
+    "p99_ms": 766.5848850097971,
+    "min_ms": 303.6542500194628,
+    "max_ms": 875.3639580099843,
+    "wall_seconds": 28.121607500012033,
+    "throughput_qps": 7.11196897260992,
+    "errors": 0,
+    "attempted": 200,
+    "error_rate": 0.0
+  },
+  "sequential_failures": 0,
+  "included_in_end_to_end": "session, hash query embedding, SQL, row mapping",
+  "included_in_db": "SQL and row mapping; query embedding is excluded",
+  "excluded": "model download, corpus insert, warmup queries",
+  "indexes": [
+    {
+      "name": "document_chunks_pkey",
+      "definition": "CREATE UNIQUE INDEX document_chunks_pkey ON public.document_chunks USING btree (id)"
+    },
+    {
+      "name": "idx_document_chunks_tenant_model",
+      "definition": "CREATE INDEX idx_document_chunks_tenant_model ON public.document_chunks USING btree (institution_id, embedding_model)"
+    },
+    {
+      "name": "ix_document_chunks_content_gin",
+      "definition": "CREATE INDEX ix_document_chunks_content_gin ON public.document_chunks USING gin (to_tsvector('english'::regconfig, (content)::text))"
+    }
+  ],
+  "postgres": "PostgreSQL 16.16 (Debian 16.16-1.pgdg12+1) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit",
+  "pgvector": "0.8.7",
+  "platform": "macOS-27.3-arm64-arm-64bit",
+  "machine": "arm64",
+  "cpu_count": 10,
+  "git_revision": "ebc60e42dc2e3bfd08c403f5b75d958a561a4089",
+  "vector_plan": "Limit  (cost=13427.23..13427.24 rows=5 width=24) (actual time=20.853..20.855 rows=5 loops=1)\n  Buffers: shared hit=12502\n  ->  Sort  (cost=13427.23..13430.35 rows=1250 width=24) (actual time=20.852..20.854 rows=5 loops=1)\n        Sort Key: ((c.embedding <=> '[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,-0.5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,-0.5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]'::vector)), c.id\n        Sort Method: top-N heapsort  Memory: 25kB\n        Buffers: shared hit=12502\n        ->  Result  (cost=8.18..13406.46 rows=1250 width=24) (actual time=0.010..18.395 rows=50000 loops=1)\n              One-Time Filter: ((NULLIF(current_setting('app.current_institution_id'::text, true), ''::text))::uuid = 'b5866225-05ad-5cfc-908e-c22916c6a1c6'::uuid)\n              Buffers: shared hit=12502\n              ->  Hash Join  (cost=8.18..13403.34 rows=1250 width=1560) (actual time=0.008..10.388 rows=50000 loops=1)\n                    Hash Cond: (c.report_id = r.id)\n                    Buffers: shared hit=12502\n                    ->  Seq Scan on document_chunks c  (cost=0.00..13250.00 rows=50000 width=1576) (actual time=0.002..6.851 rows=50000 loops=1)\n                          Filter: ((embedding IS NOT NULL) AND (institution_id = 'b5866225-05ad-5cfc-908e-c22916c6a1c6'::uuid) AND ((embedding_model)::text = 'hash-test-v1@384'::text))\n                          Buffers: shared hit=12500\n                    ->  Hash  (cost=8.16..8.16 rows=1 width=16) (actual time=0.004..0.004 rows=1 loops=1)\n                          Buckets: 1024  Batches: 1  Memory Usage: 9kB\n                          Buffers: shared hit=2\n                          ->  Index Scan using idx_research_reports_institution_created on research_reports r  (cost=0.14..8.16 rows=1 width=16) (actual time=0.003..0.003 rows=1 loops=1)\n                                Index Cond: (institution_id = 'b5866225-05ad-5cfc-908e-c22916c6a1c6'::uuid)\n                                Buffers: shared hit=2\nPlanning Time: 0.075 ms\nExecution Time: 20.867 ms",
+  "full_text_plan": "Limit  (cost=19066.40..19066.98 rows=5 width=20) (actual time=244.735..246.337 rows=5 loops=1)\n  Buffers: shared hit=12840\n  ->  Gather Merge  (cost=19066.40..19089.03 rows=194 width=20) (actual time=244.734..246.335 rows=5 loops=1)\n        Workers Planned: 2\n        Workers Launched: 2\n        Buffers: shared hit=12840\n        ->  Sort  (cost=18066.37..18066.62 rows=97 width=20) (actual time=243.455..243.456 rows=5 loops=3)\n              Sort Key: (ts_rank(to_tsvector('english'::regconfig, (c.content)::text), '''uniform'' & ''delta'' & ''alpha'' & ''india'''::tsquery)) DESC, c.id\n              Sort Method: top-N heapsort  Memory: 25kB\n              Buffers: shared hit=12840\n              Worker 0:  Sort Method: top-N heapsort  Memory: 25kB\n              Worker 1:  Sort Method: top-N heapsort  Memory: 25kB\n              ->  Result  (cost=8.18..18064.76 rows=97 width=20) (actual time=0.203..243.242 rows=2876 loops=3)\n                    One-Time Filter: ((NULLIF(current_setting('app.current_institution_id'::text, true), ''::text))::uuid = 'b5866225-05ad-5cfc-908e-c22916c6a1c6'::uuid)\n                    Buffers: shared hit=12810\n                    ->  Hash Join  (cost=8.18..18040.27 rows=97 width=221) (actual time=0.186..208.107 rows=2876 loops=3)\n                          Hash Cond: (c.report_id = r.id)\n                          Buffers: shared hit=12810\n                          ->  Parallel Seq Scan on document_chunks c  (cost=0.00..18020.83 rows=3876 width=237) (actual time=0.167..207.778 rows=2876 loops=3)\n                                Filter: ((institution_id = 'b5866225-05ad-5cfc-908e-c22916c6a1c6'::uuid) AND (to_tsvector('english'::regconfig, (content)::text) @@ '''uniform'' & ''delta'' & ''alpha'' & ''india'''::tsquery))\n                                Rows Removed by Filter: 13790\n                                Buffers: shared hit=12744\n                          ->  Hash  (cost=8.16..8.16 rows=1 width=16) (actual time=0.005..0.005 rows=1 loops=3)\n                                Buckets: 1024  Batches: 1  Memory Usage: 9kB\n                                Buffers: shared hit=8\n                                ->  Index Scan using idx_research_reports_institution_created on research_reports r  (cost=0.14..8.16 rows=1 width=16) (actual time=0.003..0.004 rows=1 loops=3)\n                                      Index Cond: (institution_id = 'b5866225-05ad-5cfc-908e-c22916c6a1c6'::uuid)\n                                      Buffers: shared hit=8\nPlanning Time: 0.083 ms\nExecution Time: 246.351 ms"
+}

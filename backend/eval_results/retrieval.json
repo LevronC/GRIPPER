@@ -1,0 +1,2299 @@
+{
+  "synthetic": true,
+  "semantic_claim": true,
+  "label_source": "evals/corpus.py, assigned before this run",
+  "embedding": {
+    "provider": "local",
+    "model": "BAAI/bge-small-en-v1.5",
+    "dimension": 384
+  },
+  "embed_seconds": 3.561,
+  "document_count": 24,
+  "query_count": 42,
+  "limit": 5,
+  "hybrid_candidate_window": 15,
+  "rrf_k": 60,
+  "git_revision": "ebc60e42dc2e3bfd08c403f5b75d958a561a4089",
+  "platform": "macOS-27.3-arm64-arm-64bit",
+  "summary": {
+    "full_text": {
+      "k": 5,
+      "query_count": 42,
+      "answerable_count": 36,
+      "unanswerable_count": 6,
+      "hit": 0.3888888888888889,
+      "mrr": 0.3888888888888889,
+      "recall": 0.3888888888888889,
+      "unanswerable_returned_any": 0,
+      "unanswerable_false_return_rate": 0.0
+    },
+    "vector": {
+      "k": 5,
+      "query_count": 42,
+      "answerable_count": 36,
+      "unanswerable_count": 6,
+      "hit": 1.0,
+      "mrr": 0.9861111111111112,
+      "recall": 0.9722222222222222,
+      "unanswerable_returned_any": 6,
+      "unanswerable_false_return_rate": 1.0
+    },
+    "hybrid": {
+      "k": 5,
+      "query_count": 42,
+      "answerable_count": 36,
+      "unanswerable_count": 6,
+      "hit": 1.0,
+      "mrr": 0.9861111111111112,
+      "recall": 1.0,
+      "unanswerable_returned_any": 6,
+      "unanswerable_false_return_rate": 1.0
+    }
+  },
+  "by_category": {
+    "ambiguous": {
+      "n": 4,
+      "full_text": 0.75,
+      "vector": 1.0,
+      "hybrid": 1.0
+    },
+    "confusable": {
+      "n": 8,
+      "full_text": 0.5,
+      "vector": 1.0,
+      "hybrid": 1.0
+    },
+    "exact": {
+      "n": 8,
+      "full_text": 0.875,
+      "vector": 1.0,
+      "hybrid": 1.0
+    },
+    "multi": {
+      "n": 6,
+      "full_text": 0.0,
+      "vector": 1.0,
+      "hybrid": 1.0
+    },
+    "paraphrase": {
+      "n": 10,
+      "full_text": 0.0,
+      "vector": 1.0,
+      "hybrid": 1.0
+    },
+    "unanswerable": {
+      "n": 0,
+      "full_text": null,
+      "vector": null,
+      "hybrid": null
+    }
+  },
+  "queries": {
+    "full_text": [
+      {
+        "query_id": "q01",
+        "category": "exact",
+        "relevant": [
+          "tech-gpu"
+        ],
+        "retrieved_chunks": [
+          "5574fca8-c09a-58ff-b139-047be809d063"
+        ],
+        "retrieved": [
+          "tech-gpu"
+        ]
+      },
+      {
+        "query_id": "q02",
+        "category": "exact",
+        "relevant": [
+          "fin-nim"
+        ],
+        "retrieved_chunks": [
+          "05c43ad9-4e2e-5e56-b182-26fa6121f023"
+        ],
+        "retrieved": [
+          "fin-nim"
+        ]
+      },
+      {
+        "query_id": "q03",
+        "category": "exact",
+        "relevant": [
+          "energy-lng"
+        ],
+        "retrieved_chunks": [
+          "b6852658-1829-52f9-b9b2-1df7e8a60c4b"
+        ],
+        "retrieved": [
+          "energy-lng"
+        ]
+      },
+      {
+        "query_id": "q04",
+        "category": "exact",
+        "relevant": [
+          "cons-retail"
+        ],
+        "retrieved_chunks": [
+          "581220f0-a6f8-50f3-85f1-b9fdeebb54ac"
+        ],
+        "retrieved": [
+          "cons-retail"
+        ]
+      },
+      {
+        "query_id": "q05",
+        "category": "exact",
+        "relevant": [
+          "health-device"
+        ],
+        "retrieved_chunks": [
+          "8554cfa7-8c00-5823-93c9-a2fa4f3ba802"
+        ],
+        "retrieved": [
+          "health-device"
+        ]
+      },
+      {
+        "query_id": "q06",
+        "category": "exact",
+        "relevant": [
+          "fin-broker"
+        ],
+        "retrieved_chunks": [
+          "56a3b3ec-2c26-5121-aef9-8c1aa2f0edb9"
+        ],
+        "retrieved": [
+          "fin-broker"
+        ]
+      },
+      {
+        "query_id": "q07",
+        "category": "exact",
+        "relevant": [
+          "ind-chem"
+        ],
+        "retrieved_chunks": [
+          "3bea274a-9329-5a96-b0b0-82c7c4896e55"
+        ],
+        "retrieved": [
+          "ind-chem"
+        ]
+      },
+      {
+        "query_id": "q08",
+        "category": "exact",
+        "relevant": [
+          "ind-rail"
+        ],
+        "retrieved_chunks": [],
+        "retrieved": []
+      },
+      {
+        "query_id": "q09",
+        "category": "paraphrase",
+        "relevant": [
+          "tech-gpu"
+        ],
+        "retrieved_chunks": [],
+        "retrieved": []
+      },
+      {
+        "query_id": "q10",
+        "category": "paraphrase",
+        "relevant": [
+          "fin-nim"
+        ],
+        "retrieved_chunks": [],
+        "retrieved": []
+      },
+      {
+        "query_id": "q11",
+        "category": "paraphrase",
+        "relevant": [
+          "energy-lng"
+        ],
+        "retrieved_chunks": [],
+        "retrieved": []
+      },
+      {
+        "query_id": "q12",
+        "category": "paraphrase",
+        "relevant": [
+          "cons-retail"
+        ],
+        "retrieved_chunks": [],
+        "retrieved": []
+      },
+      {
+        "query_id": "q13",
+        "category": "paraphrase",
+        "relevant": [
+          "health-device"
+        ],
+        "retrieved_chunks": [],
+        "retrieved": []
+      },
+      {
+        "query_id": "q14",
+        "category": "paraphrase",
+        "relevant": [
+          "fin-broker"
+        ],
+        "retrieved_chunks": [],
+        "retrieved": []
+      },
+      {
+        "query_id": "q15",
+        "category": "paraphrase",
+        "relevant": [
+          "ind-chem"
+        ],
+        "retrieved_chunks": [],
+        "retrieved": []
+      },
+      {
+        "query_id": "q16",
+        "category": "paraphrase",
+        "relevant": [
+          "ind-rail"
+        ],
+        "retrieved_chunks": [],
+        "retrieved": []
+      },
+      {
+        "query_id": "q17",
+        "category": "paraphrase",
+        "relevant": [
+          "tech-cyber"
+        ],
+        "retrieved_chunks": [],
+        "retrieved": []
+      },
+      {
+        "query_id": "q18",
+        "category": "paraphrase",
+        "relevant": [
+          "tech-cloud"
+        ],
+        "retrieved_chunks": [],
+        "retrieved": []
+      },
+      {
+        "query_id": "q19",
+        "category": "confusable",
+        "relevant": [
+          "energy-refinery"
+        ],
+        "retrieved_chunks": [],
+        "retrieved": []
+      },
+      {
+        "query_id": "q20",
+        "category": "confusable",
+        "relevant": [
+          "energy-return"
+        ],
+        "retrieved_chunks": [
+          "85ea45eb-2b16-5cc2-b85d-bc717dfc75e2"
+        ],
+        "retrieved": [
+          "energy-return"
+        ]
+      },
+      {
+        "query_id": "q21",
+        "category": "confusable",
+        "relevant": [
+          "tech-cpu"
+        ],
+        "retrieved_chunks": [],
+        "retrieved": []
+      },
+      {
+        "query_id": "q22",
+        "category": "confusable",
+        "relevant": [
+          "tech-saas"
+        ],
+        "retrieved_chunks": [
+          "3a892fd3-bfae-50cc-8979-92865556bca9"
+        ],
+        "retrieved": [
+          "tech-saas"
+        ]
+      },
+      {
+        "query_id": "q23",
+        "category": "confusable",
+        "relevant": [
+          "fin-card"
+        ],
+        "retrieved_chunks": [
+          "b8f45cd2-9df5-52d4-9a60-6e995f65aa4e"
+        ],
+        "retrieved": [
+          "fin-card"
+        ]
+      },
+      {
+        "query_id": "q24",
+        "category": "confusable",
+        "relevant": [
+          "fin-aum"
+        ],
+        "retrieved_chunks": [
+          "096278c9-202b-572c-a200-69363e2bbf98"
+        ],
+        "retrieved": [
+          "fin-aum"
+        ]
+      },
+      {
+        "query_id": "q25",
+        "category": "confusable",
+        "relevant": [
+          "cons-luxury"
+        ],
+        "retrieved_chunks": [],
+        "retrieved": []
+      },
+      {
+        "query_id": "q26",
+        "category": "confusable",
+        "relevant": [
+          "ind-aero"
+        ],
+        "retrieved_chunks": [],
+        "retrieved": []
+      },
+      {
+        "query_id": "q27",
+        "category": "multi",
+        "relevant": [
+          "health-glp-price",
+          "health-glp-trial"
+        ],
+        "retrieved_chunks": [],
+        "retrieved": []
+      },
+      {
+        "query_id": "q28",
+        "category": "multi",
+        "relevant": [
+          "energy-refinery",
+          "energy-return"
+        ],
+        "retrieved_chunks": [],
+        "retrieved": []
+      },
+      {
+        "query_id": "q29",
+        "category": "multi",
+        "relevant": [
+          "energy-solar",
+          "energy-wind"
+        ],
+        "retrieved_chunks": [],
+        "retrieved": []
+      },
+      {
+        "query_id": "q30",
+        "category": "multi",
+        "relevant": [
+          "tech-saas",
+          "tech-cyber"
+        ],
+        "retrieved_chunks": [],
+        "retrieved": []
+      },
+      {
+        "query_id": "q31",
+        "category": "multi",
+        "relevant": [
+          "energy-refinery",
+          "ind-chem"
+        ],
+        "retrieved_chunks": [],
+        "retrieved": []
+      },
+      {
+        "query_id": "q32",
+        "category": "multi",
+        "relevant": [
+          "fin-broker",
+          "fin-aum"
+        ],
+        "retrieved_chunks": [],
+        "retrieved": []
+      },
+      {
+        "query_id": "q33",
+        "category": "ambiguous",
+        "relevant": [
+          "energy-refinery",
+          "energy-return"
+        ],
+        "retrieved_chunks": [
+          "3530eb44-7d5c-59ae-bd94-960f5d4db0be",
+          "85d52972-98c4-575d-9271-73cca390ae9c",
+          "85ea45eb-2b16-5cc2-b85d-bc717dfc75e2"
+        ],
+        "retrieved": [
+          "energy-refinery",
+          "tech-cloud",
+          "energy-return"
+        ]
+      },
+      {
+        "query_id": "q34",
+        "category": "ambiguous",
+        "relevant": [
+          "tech-saas",
+          "tech-cyber"
+        ],
+        "retrieved_chunks": [
+          "3a892fd3-bfae-50cc-8979-92865556bca9",
+          "dcd2b0e5-7877-5bc4-b898-6ecd53277258"
+        ],
+        "retrieved": [
+          "tech-saas",
+          "tech-cyber"
+        ]
+      },
+      {
+        "query_id": "q35",
+        "category": "ambiguous",
+        "relevant": [
+          "energy-solar",
+          "energy-wind"
+        ],
+        "retrieved_chunks": [],
+        "retrieved": []
+      },
+      {
+        "query_id": "q36",
+        "category": "ambiguous",
+        "relevant": [
+          "health-glp-price",
+          "health-biosim"
+        ],
+        "retrieved_chunks": [
+          "608b62d3-f1f8-5d2a-90cb-2675aeffac2d",
+          "3e0c9824-1a7c-54e5-8334-8f49d6d4880f"
+        ],
+        "retrieved": [
+          "health-biosim",
+          "health-glp-price"
+        ]
+      },
+      {
+        "query_id": "q37",
+        "category": "unanswerable",
+        "relevant": [],
+        "retrieved_chunks": [],
+        "retrieved": []
+      },
+      {
+        "query_id": "q38",
+        "category": "unanswerable",
+        "relevant": [],
+        "retrieved_chunks": [],
+        "retrieved": []
+      },
+      {
+        "query_id": "q39",
+        "category": "unanswerable",
+        "relevant": [],
+        "retrieved_chunks": [],
+        "retrieved": []
+      },
+      {
+        "query_id": "q40",
+        "category": "unanswerable",
+        "relevant": [],
+        "retrieved_chunks": [],
+        "retrieved": []
+      },
+      {
+        "query_id": "q41",
+        "category": "unanswerable",
+        "relevant": [],
+        "retrieved_chunks": [],
+        "retrieved": []
+      },
+      {
+        "query_id": "q42",
+        "category": "unanswerable",
+        "relevant": [],
+        "retrieved_chunks": [],
+        "retrieved": []
+      }
+    ],
+    "vector": [
+      {
+        "query_id": "q01",
+        "category": "exact",
+        "relevant": [
+          "tech-gpu"
+        ],
+        "retrieved_chunks": [
+          "5574fca8-c09a-58ff-b139-047be809d063",
+          "73823a44-5250-5cea-a4a2-ec47c8a5f759",
+          "dcd2b0e5-7877-5bc4-b898-6ecd53277258",
+          "56a3b3ec-2c26-5121-aef9-8c1aa2f0edb9",
+          "3bea274a-9329-5a96-b0b0-82c7c4896e55"
+        ],
+        "retrieved": [
+          "tech-gpu",
+          "tech-cpu",
+          "tech-cyber",
+          "fin-broker",
+          "ind-chem"
+        ]
+      },
+      {
+        "query_id": "q02",
+        "category": "exact",
+        "relevant": [
+          "fin-nim"
+        ],
+        "retrieved_chunks": [
+          "05c43ad9-4e2e-5e56-b182-26fa6121f023",
+          "dcd2b0e5-7877-5bc4-b898-6ecd53277258",
+          "85d52972-98c4-575d-9271-73cca390ae9c",
+          "85ea45eb-2b16-5cc2-b85d-bc717dfc75e2",
+          "b8f45cd2-9df5-52d4-9a60-6e995f65aa4e"
+        ],
+        "retrieved": [
+          "fin-nim",
+          "tech-cyber",
+          "tech-cloud",
+          "energy-return",
+          "fin-card"
+        ]
+      },
+      {
+        "query_id": "q03",
+        "category": "exact",
+        "relevant": [
+          "energy-lng"
+        ],
+        "retrieved_chunks": [
+          "b6852658-1829-52f9-b9b2-1df7e8a60c4b",
+          "3bea274a-9329-5a96-b0b0-82c7c4896e55",
+          "85d52972-98c4-575d-9271-73cca390ae9c",
+          "73823a44-5250-5cea-a4a2-ec47c8a5f759",
+          "5574fca8-c09a-58ff-b139-047be809d063"
+        ],
+        "retrieved": [
+          "energy-lng",
+          "ind-chem",
+          "tech-cloud",
+          "tech-cpu",
+          "tech-gpu"
+        ]
+      },
+      {
+        "query_id": "q04",
+        "category": "exact",
+        "relevant": [
+          "cons-retail"
+        ],
+        "retrieved_chunks": [
+          "581220f0-a6f8-50f3-85f1-b9fdeebb54ac",
+          "608b62d3-f1f8-5d2a-90cb-2675aeffac2d",
+          "dcd2b0e5-7877-5bc4-b898-6ecd53277258",
+          "85d52972-98c4-575d-9271-73cca390ae9c",
+          "5574fca8-c09a-58ff-b139-047be809d063"
+        ],
+        "retrieved": [
+          "cons-retail",
+          "health-biosim",
+          "tech-cyber",
+          "tech-cloud",
+          "tech-gpu"
+        ]
+      },
+      {
+        "query_id": "q05",
+        "category": "exact",
+        "relevant": [
+          "health-device"
+        ],
+        "retrieved_chunks": [
+          "8554cfa7-8c00-5823-93c9-a2fa4f3ba802",
+          "608b62d3-f1f8-5d2a-90cb-2675aeffac2d",
+          "3e0c9824-1a7c-54e5-8334-8f49d6d4880f",
+          "56a3b3ec-2c26-5121-aef9-8c1aa2f0edb9",
+          "7de691f5-4f16-5c3d-9f59-4079e6974f8b"
+        ],
+        "retrieved": [
+          "health-device",
+          "health-biosim",
+          "health-glp-price",
+          "fin-broker",
+          "health-glp-trial"
+        ]
+      },
+      {
+        "query_id": "q06",
+        "category": "exact",
+        "relevant": [
+          "fin-broker"
+        ],
+        "retrieved_chunks": [
+          "56a3b3ec-2c26-5121-aef9-8c1aa2f0edb9",
+          "dcd2b0e5-7877-5bc4-b898-6ecd53277258",
+          "85ea45eb-2b16-5cc2-b85d-bc717dfc75e2",
+          "5574fca8-c09a-58ff-b139-047be809d063",
+          "05c43ad9-4e2e-5e56-b182-26fa6121f023"
+        ],
+        "retrieved": [
+          "fin-broker",
+          "tech-cyber",
+          "energy-return",
+          "tech-gpu",
+          "fin-nim"
+        ]
+      },
+      {
+        "query_id": "q07",
+        "category": "exact",
+        "relevant": [
+          "ind-chem"
+        ],
+        "retrieved_chunks": [
+          "3bea274a-9329-5a96-b0b0-82c7c4896e55",
+          "85d52972-98c4-575d-9271-73cca390ae9c",
+          "dcd2b0e5-7877-5bc4-b898-6ecd53277258",
+          "b6852658-1829-52f9-b9b2-1df7e8a60c4b",
+          "85ea45eb-2b16-5cc2-b85d-bc717dfc75e2"
+        ],
+        "retrieved": [
+          "ind-chem",
+          "tech-cloud",
+          "tech-cyber",
+          "energy-lng",
+          "energy-return"
+        ]
+      },
+      {
+        "query_id": "q08",
+        "category": "exact",
+        "relevant": [
+          "ind-rail"
+        ],
+        "retrieved_chunks": [
+          "6bcbf40a-057b-58ba-a12d-0475af7dd74e",
+          "3bea274a-9329-5a96-b0b0-82c7c4896e55",
+          "b6852658-1829-52f9-b9b2-1df7e8a60c4b",
+          "56a3b3ec-2c26-5121-aef9-8c1aa2f0edb9",
+          "5574fca8-c09a-58ff-b139-047be809d063"
+        ],
+        "retrieved": [
+          "ind-rail",
+          "ind-chem",
+          "energy-lng",
+          "fin-broker",
+          "tech-gpu"
+        ]
+      },
+      {
+        "query_id": "q09",
+        "category": "paraphrase",
+        "relevant": [
+          "tech-gpu"
+        ],
+        "retrieved_chunks": [
+          "5574fca8-c09a-58ff-b139-047be809d063",
+          "73823a44-5250-5cea-a4a2-ec47c8a5f759",
+          "dcd2b0e5-7877-5bc4-b898-6ecd53277258",
+          "85d52972-98c4-575d-9271-73cca390ae9c",
+          "c0c49d86-ae7d-569d-aaa8-7a643f58f0cf"
+        ],
+        "retrieved": [
+          "tech-gpu",
+          "tech-cpu",
+          "tech-cyber",
+          "tech-cloud",
+          "cons-luxury"
+        ]
+      },
+      {
+        "query_id": "q10",
+        "category": "paraphrase",
+        "relevant": [
+          "fin-nim"
+        ],
+        "retrieved_chunks": [
+          "05c43ad9-4e2e-5e56-b182-26fa6121f023",
+          "85ea45eb-2b16-5cc2-b85d-bc717dfc75e2",
+          "56a3b3ec-2c26-5121-aef9-8c1aa2f0edb9",
+          "581220f0-a6f8-50f3-85f1-b9fdeebb54ac",
+          "b8f45cd2-9df5-52d4-9a60-6e995f65aa4e"
+        ],
+        "retrieved": [
+          "fin-nim",
+          "energy-return",
+          "fin-broker",
+          "cons-retail",
+          "fin-card"
+        ]
+      },
+      {
+        "query_id": "q11",
+        "category": "paraphrase",
+        "relevant": [
+          "energy-lng"
+        ],
+        "retrieved_chunks": [
+          "b6852658-1829-52f9-b9b2-1df7e8a60c4b",
+          "85d52972-98c4-575d-9271-73cca390ae9c",
+          "3bea274a-9329-5a96-b0b0-82c7c4896e55",
+          "73823a44-5250-5cea-a4a2-ec47c8a5f759",
+          "5574fca8-c09a-58ff-b139-047be809d063"
+        ],
+        "retrieved": [
+          "energy-lng",
+          "tech-cloud",
+          "ind-chem",
+          "tech-cpu",
+          "tech-gpu"
+        ]
+      },
+      {
+        "query_id": "q12",
+        "category": "paraphrase",
+        "relevant": [
+          "cons-retail"
+        ],
+        "retrieved_chunks": [
+          "581220f0-a6f8-50f3-85f1-b9fdeebb54ac",
+          "85ea45eb-2b16-5cc2-b85d-bc717dfc75e2",
+          "608b62d3-f1f8-5d2a-90cb-2675aeffac2d",
+          "dcd2b0e5-7877-5bc4-b898-6ecd53277258",
+          "56a3b3ec-2c26-5121-aef9-8c1aa2f0edb9"
+        ],
+        "retrieved": [
+          "cons-retail",
+          "energy-return",
+          "health-biosim",
+          "tech-cyber",
+          "fin-broker"
+        ]
+      },
+      {
+        "query_id": "q13",
+        "category": "paraphrase",
+        "relevant": [
+          "health-device"
+        ],
+        "retrieved_chunks": [
+          "8554cfa7-8c00-5823-93c9-a2fa4f3ba802",
+          "85d52972-98c4-575d-9271-73cca390ae9c",
+          "3bea274a-9329-5a96-b0b0-82c7c4896e55",
+          "608b62d3-f1f8-5d2a-90cb-2675aeffac2d",
+          "85ea45eb-2b16-5cc2-b85d-bc717dfc75e2"
+        ],
+        "retrieved": [
+          "health-device",
+          "tech-cloud",
+          "ind-chem",
+          "health-biosim",
+          "energy-return"
+        ]
+      },
+      {
+        "query_id": "q14",
+        "category": "paraphrase",
+        "relevant": [
+          "fin-broker"
+        ],
+        "retrieved_chunks": [
+          "56a3b3ec-2c26-5121-aef9-8c1aa2f0edb9",
+          "85ea45eb-2b16-5cc2-b85d-bc717dfc75e2",
+          "73823a44-5250-5cea-a4a2-ec47c8a5f759",
+          "dcd2b0e5-7877-5bc4-b898-6ecd53277258",
+          "85d52972-98c4-575d-9271-73cca390ae9c"
+        ],
+        "retrieved": [
+          "fin-broker",
+          "energy-return",
+          "tech-cpu",
+          "tech-cyber",
+          "tech-cloud"
+        ]
+      },
+      {
+        "query_id": "q15",
+        "category": "paraphrase",
+        "relevant": [
+          "ind-chem"
+        ],
+        "retrieved_chunks": [
+          "3bea274a-9329-5a96-b0b0-82c7c4896e55",
+          "85d52972-98c4-575d-9271-73cca390ae9c",
+          "b6852658-1829-52f9-b9b2-1df7e8a60c4b",
+          "608b62d3-f1f8-5d2a-90cb-2675aeffac2d",
+          "7de691f5-4f16-5c3d-9f59-4079e6974f8b"
+        ],
+        "retrieved": [
+          "ind-chem",
+          "tech-cloud",
+          "energy-lng",
+          "health-biosim",
+          "health-glp-trial"
+        ]
+      },
+      {
+        "query_id": "q16",
+        "category": "paraphrase",
+        "relevant": [
+          "ind-rail"
+        ],
+        "retrieved_chunks": [
+          "6bcbf40a-057b-58ba-a12d-0475af7dd74e",
+          "581220f0-a6f8-50f3-85f1-b9fdeebb54ac",
+          "85d52972-98c4-575d-9271-73cca390ae9c",
+          "5574fca8-c09a-58ff-b139-047be809d063",
+          "56a3b3ec-2c26-5121-aef9-8c1aa2f0edb9"
+        ],
+        "retrieved": [
+          "ind-rail",
+          "cons-retail",
+          "tech-cloud",
+          "tech-gpu",
+          "fin-broker"
+        ]
+      },
+      {
+        "query_id": "q17",
+        "category": "paraphrase",
+        "relevant": [
+          "tech-cyber"
+        ],
+        "retrieved_chunks": [
+          "dcd2b0e5-7877-5bc4-b898-6ecd53277258",
+          "3a892fd3-bfae-50cc-8979-92865556bca9",
+          "73823a44-5250-5cea-a4a2-ec47c8a5f759",
+          "608b62d3-f1f8-5d2a-90cb-2675aeffac2d",
+          "56a3b3ec-2c26-5121-aef9-8c1aa2f0edb9"
+        ],
+        "retrieved": [
+          "tech-cyber",
+          "tech-saas",
+          "tech-cpu",
+          "health-biosim",
+          "fin-broker"
+        ]
+      },
+      {
+        "query_id": "q18",
+        "category": "paraphrase",
+        "relevant": [
+          "tech-cloud"
+        ],
+        "retrieved_chunks": [
+          "85d52972-98c4-575d-9271-73cca390ae9c",
+          "b6852658-1829-52f9-b9b2-1df7e8a60c4b",
+          "73823a44-5250-5cea-a4a2-ec47c8a5f759",
+          "dcd2b0e5-7877-5bc4-b898-6ecd53277258",
+          "0e84f428-3870-5865-8245-7267ac3b3665"
+        ],
+        "retrieved": [
+          "tech-cloud",
+          "energy-lng",
+          "tech-cpu",
+          "tech-cyber",
+          "energy-wind"
+        ]
+      },
+      {
+        "query_id": "q19",
+        "category": "confusable",
+        "relevant": [
+          "energy-refinery"
+        ],
+        "retrieved_chunks": [
+          "3530eb44-7d5c-59ae-bd94-960f5d4db0be",
+          "3bea274a-9329-5a96-b0b0-82c7c4896e55",
+          "85d52972-98c4-575d-9271-73cca390ae9c",
+          "85ea45eb-2b16-5cc2-b85d-bc717dfc75e2",
+          "b6852658-1829-52f9-b9b2-1df7e8a60c4b"
+        ],
+        "retrieved": [
+          "energy-refinery",
+          "ind-chem",
+          "tech-cloud",
+          "energy-return",
+          "energy-lng"
+        ]
+      },
+      {
+        "query_id": "q20",
+        "category": "confusable",
+        "relevant": [
+          "energy-return"
+        ],
+        "retrieved_chunks": [
+          "85ea45eb-2b16-5cc2-b85d-bc717dfc75e2",
+          "56a3b3ec-2c26-5121-aef9-8c1aa2f0edb9",
+          "3530eb44-7d5c-59ae-bd94-960f5d4db0be",
+          "dcd2b0e5-7877-5bc4-b898-6ecd53277258",
+          "3bea274a-9329-5a96-b0b0-82c7c4896e55"
+        ],
+        "retrieved": [
+          "energy-return",
+          "fin-broker",
+          "energy-refinery",
+          "tech-cyber",
+          "ind-chem"
+        ]
+      },
+      {
+        "query_id": "q21",
+        "category": "confusable",
+        "relevant": [
+          "tech-cpu"
+        ],
+        "retrieved_chunks": [
+          "73823a44-5250-5cea-a4a2-ec47c8a5f759",
+          "dcd2b0e5-7877-5bc4-b898-6ecd53277258",
+          "56a3b3ec-2c26-5121-aef9-8c1aa2f0edb9",
+          "5574fca8-c09a-58ff-b139-047be809d063",
+          "85d52972-98c4-575d-9271-73cca390ae9c"
+        ],
+        "retrieved": [
+          "tech-cpu",
+          "tech-cyber",
+          "fin-broker",
+          "tech-gpu",
+          "tech-cloud"
+        ]
+      },
+      {
+        "query_id": "q22",
+        "category": "confusable",
+        "relevant": [
+          "tech-saas"
+        ],
+        "retrieved_chunks": [
+          "3a892fd3-bfae-50cc-8979-92865556bca9",
+          "dcd2b0e5-7877-5bc4-b898-6ecd53277258",
+          "608b62d3-f1f8-5d2a-90cb-2675aeffac2d",
+          "73823a44-5250-5cea-a4a2-ec47c8a5f759",
+          "56a3b3ec-2c26-5121-aef9-8c1aa2f0edb9"
+        ],
+        "retrieved": [
+          "tech-saas",
+          "tech-cyber",
+          "health-biosim",
+          "tech-cpu",
+          "fin-broker"
+        ]
+      },
+      {
+        "query_id": "q23",
+        "category": "confusable",
+        "relevant": [
+          "fin-card"
+        ],
+        "retrieved_chunks": [
+          "b8f45cd2-9df5-52d4-9a60-6e995f65aa4e",
+          "581220f0-a6f8-50f3-85f1-b9fdeebb54ac",
+          "56a3b3ec-2c26-5121-aef9-8c1aa2f0edb9",
+          "05c43ad9-4e2e-5e56-b182-26fa6121f023",
+          "0e84f428-3870-5865-8245-7267ac3b3665"
+        ],
+        "retrieved": [
+          "fin-card",
+          "cons-retail",
+          "fin-broker",
+          "fin-nim",
+          "energy-wind"
+        ]
+      },
+      {
+        "query_id": "q24",
+        "category": "confusable",
+        "relevant": [
+          "fin-aum"
+        ],
+        "retrieved_chunks": [
+          "096278c9-202b-572c-a200-69363e2bbf98",
+          "b8f45cd2-9df5-52d4-9a60-6e995f65aa4e",
+          "85d52972-98c4-575d-9271-73cca390ae9c",
+          "0e84f428-3870-5865-8245-7267ac3b3665",
+          "56a3b3ec-2c26-5121-aef9-8c1aa2f0edb9"
+        ],
+        "retrieved": [
+          "fin-aum",
+          "fin-card",
+          "tech-cloud",
+          "energy-wind",
+          "fin-broker"
+        ]
+      },
+      {
+        "query_id": "q25",
+        "category": "confusable",
+        "relevant": [
+          "cons-luxury"
+        ],
+        "retrieved_chunks": [
+          "c0c49d86-ae7d-569d-aaa8-7a643f58f0cf",
+          "56a3b3ec-2c26-5121-aef9-8c1aa2f0edb9",
+          "096278c9-202b-572c-a200-69363e2bbf98",
+          "85d52972-98c4-575d-9271-73cca390ae9c",
+          "581220f0-a6f8-50f3-85f1-b9fdeebb54ac"
+        ],
+        "retrieved": [
+          "cons-luxury",
+          "fin-broker",
+          "fin-aum",
+          "tech-cloud",
+          "cons-retail"
+        ]
+      },
+      {
+        "query_id": "q26",
+        "category": "confusable",
+        "relevant": [
+          "ind-aero"
+        ],
+        "retrieved_chunks": [
+          "87acd947-bded-54a2-aa9b-e36824acc473",
+          "85d52972-98c4-575d-9271-73cca390ae9c",
+          "3bea274a-9329-5a96-b0b0-82c7c4896e55",
+          "5574fca8-c09a-58ff-b139-047be809d063",
+          "73823a44-5250-5cea-a4a2-ec47c8a5f759"
+        ],
+        "retrieved": [
+          "ind-aero",
+          "tech-cloud",
+          "ind-chem",
+          "tech-gpu",
+          "tech-cpu"
+        ]
+      },
+      {
+        "query_id": "q27",
+        "category": "multi",
+        "relevant": [
+          "health-glp-price",
+          "health-glp-trial"
+        ],
+        "retrieved_chunks": [
+          "3e0c9824-1a7c-54e5-8334-8f49d6d4880f",
+          "7de691f5-4f16-5c3d-9f59-4079e6974f8b",
+          "608b62d3-f1f8-5d2a-90cb-2675aeffac2d",
+          "dcd2b0e5-7877-5bc4-b898-6ecd53277258",
+          "5574fca8-c09a-58ff-b139-047be809d063"
+        ],
+        "retrieved": [
+          "health-glp-price",
+          "health-glp-trial",
+          "health-biosim",
+          "tech-cyber",
+          "tech-gpu"
+        ]
+      },
+      {
+        "query_id": "q28",
+        "category": "multi",
+        "relevant": [
+          "energy-refinery",
+          "energy-return"
+        ],
+        "retrieved_chunks": [
+          "85ea45eb-2b16-5cc2-b85d-bc717dfc75e2",
+          "85d52972-98c4-575d-9271-73cca390ae9c",
+          "3530eb44-7d5c-59ae-bd94-960f5d4db0be",
+          "3bea274a-9329-5a96-b0b0-82c7c4896e55",
+          "56a3b3ec-2c26-5121-aef9-8c1aa2f0edb9"
+        ],
+        "retrieved": [
+          "energy-return",
+          "tech-cloud",
+          "energy-refinery",
+          "ind-chem",
+          "fin-broker"
+        ]
+      },
+      {
+        "query_id": "q29",
+        "category": "multi",
+        "relevant": [
+          "energy-solar",
+          "energy-wind"
+        ],
+        "retrieved_chunks": [
+          "0e84f428-3870-5865-8245-7267ac3b3665",
+          "07090204-c7a9-540f-ba9d-e7b85f04dbd9",
+          "85d52972-98c4-575d-9271-73cca390ae9c",
+          "3bea274a-9329-5a96-b0b0-82c7c4896e55",
+          "3530eb44-7d5c-59ae-bd94-960f5d4db0be"
+        ],
+        "retrieved": [
+          "energy-wind",
+          "energy-solar",
+          "tech-cloud",
+          "ind-chem",
+          "energy-refinery"
+        ]
+      },
+      {
+        "query_id": "q30",
+        "category": "multi",
+        "relevant": [
+          "tech-saas",
+          "tech-cyber"
+        ],
+        "retrieved_chunks": [
+          "dcd2b0e5-7877-5bc4-b898-6ecd53277258",
+          "608b62d3-f1f8-5d2a-90cb-2675aeffac2d",
+          "3a892fd3-bfae-50cc-8979-92865556bca9",
+          "56a3b3ec-2c26-5121-aef9-8c1aa2f0edb9",
+          "c8ee2f42-5303-5e07-9126-6d685d329ece"
+        ],
+        "retrieved": [
+          "tech-cyber",
+          "health-biosim",
+          "tech-saas",
+          "fin-broker",
+          "cons-ad"
+        ]
+      },
+      {
+        "query_id": "q31",
+        "category": "multi",
+        "relevant": [
+          "energy-refinery",
+          "ind-chem"
+        ],
+        "retrieved_chunks": [
+          "3bea274a-9329-5a96-b0b0-82c7c4896e55",
+          "85ea45eb-2b16-5cc2-b85d-bc717dfc75e2",
+          "3530eb44-7d5c-59ae-bd94-960f5d4db0be",
+          "0e84f428-3870-5865-8245-7267ac3b3665",
+          "b6852658-1829-52f9-b9b2-1df7e8a60c4b"
+        ],
+        "retrieved": [
+          "ind-chem",
+          "energy-return",
+          "energy-refinery",
+          "energy-wind",
+          "energy-lng"
+        ]
+      },
+      {
+        "query_id": "q32",
+        "category": "multi",
+        "relevant": [
+          "fin-broker",
+          "fin-aum"
+        ],
+        "retrieved_chunks": [
+          "096278c9-202b-572c-a200-69363e2bbf98",
+          "56a3b3ec-2c26-5121-aef9-8c1aa2f0edb9",
+          "85ea45eb-2b16-5cc2-b85d-bc717dfc75e2",
+          "85d52972-98c4-575d-9271-73cca390ae9c",
+          "608b62d3-f1f8-5d2a-90cb-2675aeffac2d"
+        ],
+        "retrieved": [
+          "fin-aum",
+          "fin-broker",
+          "energy-return",
+          "tech-cloud",
+          "health-biosim"
+        ]
+      },
+      {
+        "query_id": "q33",
+        "category": "ambiguous",
+        "relevant": [
+          "energy-refinery",
+          "energy-return"
+        ],
+        "retrieved_chunks": [
+          "85d52972-98c4-575d-9271-73cca390ae9c",
+          "85ea45eb-2b16-5cc2-b85d-bc717dfc75e2",
+          "b6852658-1829-52f9-b9b2-1df7e8a60c4b",
+          "3bea274a-9329-5a96-b0b0-82c7c4896e55",
+          "096278c9-202b-572c-a200-69363e2bbf98"
+        ],
+        "retrieved": [
+          "tech-cloud",
+          "energy-return",
+          "energy-lng",
+          "ind-chem",
+          "fin-aum"
+        ]
+      },
+      {
+        "query_id": "q34",
+        "category": "ambiguous",
+        "relevant": [
+          "tech-saas",
+          "tech-cyber"
+        ],
+        "retrieved_chunks": [
+          "dcd2b0e5-7877-5bc4-b898-6ecd53277258",
+          "608b62d3-f1f8-5d2a-90cb-2675aeffac2d",
+          "3bea274a-9329-5a96-b0b0-82c7c4896e55",
+          "56a3b3ec-2c26-5121-aef9-8c1aa2f0edb9",
+          "c8ee2f42-5303-5e07-9126-6d685d329ece"
+        ],
+        "retrieved": [
+          "tech-cyber",
+          "health-biosim",
+          "ind-chem",
+          "fin-broker",
+          "cons-ad"
+        ]
+      },
+      {
+        "query_id": "q35",
+        "category": "ambiguous",
+        "relevant": [
+          "energy-solar",
+          "energy-wind"
+        ],
+        "retrieved_chunks": [
+          "0e84f428-3870-5865-8245-7267ac3b3665",
+          "07090204-c7a9-540f-ba9d-e7b85f04dbd9",
+          "3bea274a-9329-5a96-b0b0-82c7c4896e55",
+          "85ea45eb-2b16-5cc2-b85d-bc717dfc75e2",
+          "85d52972-98c4-575d-9271-73cca390ae9c"
+        ],
+        "retrieved": [
+          "energy-wind",
+          "energy-solar",
+          "ind-chem",
+          "energy-return",
+          "tech-cloud"
+        ]
+      },
+      {
+        "query_id": "q36",
+        "category": "ambiguous",
+        "relevant": [
+          "health-glp-price",
+          "health-biosim"
+        ],
+        "retrieved_chunks": [
+          "608b62d3-f1f8-5d2a-90cb-2675aeffac2d",
+          "3e0c9824-1a7c-54e5-8334-8f49d6d4880f",
+          "3bea274a-9329-5a96-b0b0-82c7c4896e55",
+          "7de691f5-4f16-5c3d-9f59-4079e6974f8b",
+          "c8ee2f42-5303-5e07-9126-6d685d329ece"
+        ],
+        "retrieved": [
+          "health-biosim",
+          "health-glp-price",
+          "ind-chem",
+          "health-glp-trial",
+          "cons-ad"
+        ]
+      },
+      {
+        "query_id": "q37",
+        "category": "unanswerable",
+        "relevant": [],
+        "retrieved_chunks": [
+          "85d52972-98c4-575d-9271-73cca390ae9c",
+          "608b62d3-f1f8-5d2a-90cb-2675aeffac2d",
+          "7de691f5-4f16-5c3d-9f59-4079e6974f8b",
+          "096278c9-202b-572c-a200-69363e2bbf98",
+          "dcd2b0e5-7877-5bc4-b898-6ecd53277258"
+        ],
+        "retrieved": [
+          "tech-cloud",
+          "health-biosim",
+          "health-glp-trial",
+          "fin-aum",
+          "tech-cyber"
+        ]
+      },
+      {
+        "query_id": "q38",
+        "category": "unanswerable",
+        "relevant": [],
+        "retrieved_chunks": [
+          "85ea45eb-2b16-5cc2-b85d-bc717dfc75e2",
+          "73823a44-5250-5cea-a4a2-ec47c8a5f759",
+          "dcd2b0e5-7877-5bc4-b898-6ecd53277258",
+          "3bea274a-9329-5a96-b0b0-82c7c4896e55",
+          "85d52972-98c4-575d-9271-73cca390ae9c"
+        ],
+        "retrieved": [
+          "energy-return",
+          "tech-cpu",
+          "tech-cyber",
+          "ind-chem",
+          "tech-cloud"
+        ]
+      },
+      {
+        "query_id": "q39",
+        "category": "unanswerable",
+        "relevant": [],
+        "retrieved_chunks": [
+          "85d52972-98c4-575d-9271-73cca390ae9c",
+          "85ea45eb-2b16-5cc2-b85d-bc717dfc75e2",
+          "0e84f428-3870-5865-8245-7267ac3b3665",
+          "56a3b3ec-2c26-5121-aef9-8c1aa2f0edb9",
+          "3bea274a-9329-5a96-b0b0-82c7c4896e55"
+        ],
+        "retrieved": [
+          "tech-cloud",
+          "energy-return",
+          "energy-wind",
+          "fin-broker",
+          "ind-chem"
+        ]
+      },
+      {
+        "query_id": "q40",
+        "category": "unanswerable",
+        "relevant": [],
+        "retrieved_chunks": [
+          "85ea45eb-2b16-5cc2-b85d-bc717dfc75e2",
+          "dcd2b0e5-7877-5bc4-b898-6ecd53277258",
+          "85d52972-98c4-575d-9271-73cca390ae9c",
+          "3bea274a-9329-5a96-b0b0-82c7c4896e55",
+          "7de691f5-4f16-5c3d-9f59-4079e6974f8b"
+        ],
+        "retrieved": [
+          "energy-return",
+          "tech-cyber",
+          "tech-cloud",
+          "ind-chem",
+          "health-glp-trial"
+        ]
+      },
+      {
+        "query_id": "q41",
+        "category": "unanswerable",
+        "relevant": [],
+        "retrieved_chunks": [
+          "6bcbf40a-057b-58ba-a12d-0475af7dd74e",
+          "b6852658-1829-52f9-b9b2-1df7e8a60c4b",
+          "56a3b3ec-2c26-5121-aef9-8c1aa2f0edb9",
+          "3bea274a-9329-5a96-b0b0-82c7c4896e55",
+          "c0c49d86-ae7d-569d-aaa8-7a643f58f0cf"
+        ],
+        "retrieved": [
+          "ind-rail",
+          "energy-lng",
+          "fin-broker",
+          "ind-chem",
+          "cons-luxury"
+        ]
+      },
+      {
+        "query_id": "q42",
+        "category": "unanswerable",
+        "relevant": [],
+        "retrieved_chunks": [
+          "85d52972-98c4-575d-9271-73cca390ae9c",
+          "85ea45eb-2b16-5cc2-b85d-bc717dfc75e2",
+          "3bea274a-9329-5a96-b0b0-82c7c4896e55",
+          "dcd2b0e5-7877-5bc4-b898-6ecd53277258",
+          "0e84f428-3870-5865-8245-7267ac3b3665"
+        ],
+        "retrieved": [
+          "tech-cloud",
+          "energy-return",
+          "ind-chem",
+          "tech-cyber",
+          "energy-wind"
+        ]
+      }
+    ],
+    "hybrid": [
+      {
+        "query_id": "q01",
+        "category": "exact",
+        "relevant": [
+          "tech-gpu"
+        ],
+        "retrieved_chunks": [
+          "5574fca8-c09a-58ff-b139-047be809d063",
+          "73823a44-5250-5cea-a4a2-ec47c8a5f759",
+          "dcd2b0e5-7877-5bc4-b898-6ecd53277258",
+          "56a3b3ec-2c26-5121-aef9-8c1aa2f0edb9",
+          "3bea274a-9329-5a96-b0b0-82c7c4896e55"
+        ],
+        "retrieved": [
+          "tech-gpu",
+          "tech-cpu",
+          "tech-cyber",
+          "fin-broker",
+          "ind-chem"
+        ]
+      },
+      {
+        "query_id": "q02",
+        "category": "exact",
+        "relevant": [
+          "fin-nim"
+        ],
+        "retrieved_chunks": [
+          "05c43ad9-4e2e-5e56-b182-26fa6121f023",
+          "dcd2b0e5-7877-5bc4-b898-6ecd53277258",
+          "85d52972-98c4-575d-9271-73cca390ae9c",
+          "85ea45eb-2b16-5cc2-b85d-bc717dfc75e2",
+          "b8f45cd2-9df5-52d4-9a60-6e995f65aa4e"
+        ],
+        "retrieved": [
+          "fin-nim",
+          "tech-cyber",
+          "tech-cloud",
+          "energy-return",
+          "fin-card"
+        ]
+      },
+      {
+        "query_id": "q03",
+        "category": "exact",
+        "relevant": [
+          "energy-lng"
+        ],
+        "retrieved_chunks": [
+          "b6852658-1829-52f9-b9b2-1df7e8a60c4b",
+          "3bea274a-9329-5a96-b0b0-82c7c4896e55",
+          "85d52972-98c4-575d-9271-73cca390ae9c",
+          "73823a44-5250-5cea-a4a2-ec47c8a5f759",
+          "5574fca8-c09a-58ff-b139-047be809d063"
+        ],
+        "retrieved": [
+          "energy-lng",
+          "ind-chem",
+          "tech-cloud",
+          "tech-cpu",
+          "tech-gpu"
+        ]
+      },
+      {
+        "query_id": "q04",
+        "category": "exact",
+        "relevant": [
+          "cons-retail"
+        ],
+        "retrieved_chunks": [
+          "581220f0-a6f8-50f3-85f1-b9fdeebb54ac",
+          "608b62d3-f1f8-5d2a-90cb-2675aeffac2d",
+          "dcd2b0e5-7877-5bc4-b898-6ecd53277258",
+          "85d52972-98c4-575d-9271-73cca390ae9c",
+          "5574fca8-c09a-58ff-b139-047be809d063"
+        ],
+        "retrieved": [
+          "cons-retail",
+          "health-biosim",
+          "tech-cyber",
+          "tech-cloud",
+          "tech-gpu"
+        ]
+      },
+      {
+        "query_id": "q05",
+        "category": "exact",
+        "relevant": [
+          "health-device"
+        ],
+        "retrieved_chunks": [
+          "8554cfa7-8c00-5823-93c9-a2fa4f3ba802",
+          "608b62d3-f1f8-5d2a-90cb-2675aeffac2d",
+          "3e0c9824-1a7c-54e5-8334-8f49d6d4880f",
+          "56a3b3ec-2c26-5121-aef9-8c1aa2f0edb9",
+          "7de691f5-4f16-5c3d-9f59-4079e6974f8b"
+        ],
+        "retrieved": [
+          "health-device",
+          "health-biosim",
+          "health-glp-price",
+          "fin-broker",
+          "health-glp-trial"
+        ]
+      },
+      {
+        "query_id": "q06",
+        "category": "exact",
+        "relevant": [
+          "fin-broker"
+        ],
+        "retrieved_chunks": [
+          "56a3b3ec-2c26-5121-aef9-8c1aa2f0edb9",
+          "dcd2b0e5-7877-5bc4-b898-6ecd53277258",
+          "85ea45eb-2b16-5cc2-b85d-bc717dfc75e2",
+          "5574fca8-c09a-58ff-b139-047be809d063",
+          "05c43ad9-4e2e-5e56-b182-26fa6121f023"
+        ],
+        "retrieved": [
+          "fin-broker",
+          "tech-cyber",
+          "energy-return",
+          "tech-gpu",
+          "fin-nim"
+        ]
+      },
+      {
+        "query_id": "q07",
+        "category": "exact",
+        "relevant": [
+          "ind-chem"
+        ],
+        "retrieved_chunks": [
+          "3bea274a-9329-5a96-b0b0-82c7c4896e55",
+          "85d52972-98c4-575d-9271-73cca390ae9c",
+          "dcd2b0e5-7877-5bc4-b898-6ecd53277258",
+          "b6852658-1829-52f9-b9b2-1df7e8a60c4b",
+          "85ea45eb-2b16-5cc2-b85d-bc717dfc75e2"
+        ],
+        "retrieved": [
+          "ind-chem",
+          "tech-cloud",
+          "tech-cyber",
+          "energy-lng",
+          "energy-return"
+        ]
+      },
+      {
+        "query_id": "q08",
+        "category": "exact",
+        "relevant": [
+          "ind-rail"
+        ],
+        "retrieved_chunks": [
+          "6bcbf40a-057b-58ba-a12d-0475af7dd74e",
+          "3bea274a-9329-5a96-b0b0-82c7c4896e55",
+          "b6852658-1829-52f9-b9b2-1df7e8a60c4b",
+          "56a3b3ec-2c26-5121-aef9-8c1aa2f0edb9",
+          "5574fca8-c09a-58ff-b139-047be809d063"
+        ],
+        "retrieved": [
+          "ind-rail",
+          "ind-chem",
+          "energy-lng",
+          "fin-broker",
+          "tech-gpu"
+        ]
+      },
+      {
+        "query_id": "q09",
+        "category": "paraphrase",
+        "relevant": [
+          "tech-gpu"
+        ],
+        "retrieved_chunks": [
+          "5574fca8-c09a-58ff-b139-047be809d063",
+          "73823a44-5250-5cea-a4a2-ec47c8a5f759",
+          "dcd2b0e5-7877-5bc4-b898-6ecd53277258",
+          "85d52972-98c4-575d-9271-73cca390ae9c",
+          "c0c49d86-ae7d-569d-aaa8-7a643f58f0cf"
+        ],
+        "retrieved": [
+          "tech-gpu",
+          "tech-cpu",
+          "tech-cyber",
+          "tech-cloud",
+          "cons-luxury"
+        ]
+      },
+      {
+        "query_id": "q10",
+        "category": "paraphrase",
+        "relevant": [
+          "fin-nim"
+        ],
+        "retrieved_chunks": [
+          "05c43ad9-4e2e-5e56-b182-26fa6121f023",
+          "85ea45eb-2b16-5cc2-b85d-bc717dfc75e2",
+          "56a3b3ec-2c26-5121-aef9-8c1aa2f0edb9",
+          "581220f0-a6f8-50f3-85f1-b9fdeebb54ac",
+          "b8f45cd2-9df5-52d4-9a60-6e995f65aa4e"
+        ],
+        "retrieved": [
+          "fin-nim",
+          "energy-return",
+          "fin-broker",
+          "cons-retail",
+          "fin-card"
+        ]
+      },
+      {
+        "query_id": "q11",
+        "category": "paraphrase",
+        "relevant": [
+          "energy-lng"
+        ],
+        "retrieved_chunks": [
+          "b6852658-1829-52f9-b9b2-1df7e8a60c4b",
+          "85d52972-98c4-575d-9271-73cca390ae9c",
+          "3bea274a-9329-5a96-b0b0-82c7c4896e55",
+          "73823a44-5250-5cea-a4a2-ec47c8a5f759",
+          "5574fca8-c09a-58ff-b139-047be809d063"
+        ],
+        "retrieved": [
+          "energy-lng",
+          "tech-cloud",
+          "ind-chem",
+          "tech-cpu",
+          "tech-gpu"
+        ]
+      },
+      {
+        "query_id": "q12",
+        "category": "paraphrase",
+        "relevant": [
+          "cons-retail"
+        ],
+        "retrieved_chunks": [
+          "581220f0-a6f8-50f3-85f1-b9fdeebb54ac",
+          "85ea45eb-2b16-5cc2-b85d-bc717dfc75e2",
+          "608b62d3-f1f8-5d2a-90cb-2675aeffac2d",
+          "dcd2b0e5-7877-5bc4-b898-6ecd53277258",
+          "56a3b3ec-2c26-5121-aef9-8c1aa2f0edb9"
+        ],
+        "retrieved": [
+          "cons-retail",
+          "energy-return",
+          "health-biosim",
+          "tech-cyber",
+          "fin-broker"
+        ]
+      },
+      {
+        "query_id": "q13",
+        "category": "paraphrase",
+        "relevant": [
+          "health-device"
+        ],
+        "retrieved_chunks": [
+          "8554cfa7-8c00-5823-93c9-a2fa4f3ba802",
+          "85d52972-98c4-575d-9271-73cca390ae9c",
+          "3bea274a-9329-5a96-b0b0-82c7c4896e55",
+          "608b62d3-f1f8-5d2a-90cb-2675aeffac2d",
+          "85ea45eb-2b16-5cc2-b85d-bc717dfc75e2"
+        ],
+        "retrieved": [
+          "health-device",
+          "tech-cloud",
+          "ind-chem",
+          "health-biosim",
+          "energy-return"
+        ]
+      },
+      {
+        "query_id": "q14",
+        "category": "paraphrase",
+        "relevant": [
+          "fin-broker"
+        ],
+        "retrieved_chunks": [
+          "56a3b3ec-2c26-5121-aef9-8c1aa2f0edb9",
+          "85ea45eb-2b16-5cc2-b85d-bc717dfc75e2",
+          "73823a44-5250-5cea-a4a2-ec47c8a5f759",
+          "dcd2b0e5-7877-5bc4-b898-6ecd53277258",
+          "85d52972-98c4-575d-9271-73cca390ae9c"
+        ],
+        "retrieved": [
+          "fin-broker",
+          "energy-return",
+          "tech-cpu",
+          "tech-cyber",
+          "tech-cloud"
+        ]
+      },
+      {
+        "query_id": "q15",
+        "category": "paraphrase",
+        "relevant": [
+          "ind-chem"
+        ],
+        "retrieved_chunks": [
+          "3bea274a-9329-5a96-b0b0-82c7c4896e55",
+          "85d52972-98c4-575d-9271-73cca390ae9c",
+          "b6852658-1829-52f9-b9b2-1df7e8a60c4b",
+          "608b62d3-f1f8-5d2a-90cb-2675aeffac2d",
+          "7de691f5-4f16-5c3d-9f59-4079e6974f8b"
+        ],
+        "retrieved": [
+          "ind-chem",
+          "tech-cloud",
+          "energy-lng",
+          "health-biosim",
+          "health-glp-trial"
+        ]
+      },
+      {
+        "query_id": "q16",
+        "category": "paraphrase",
+        "relevant": [
+          "ind-rail"
+        ],
+        "retrieved_chunks": [
+          "6bcbf40a-057b-58ba-a12d-0475af7dd74e",
+          "581220f0-a6f8-50f3-85f1-b9fdeebb54ac",
+          "85d52972-98c4-575d-9271-73cca390ae9c",
+          "5574fca8-c09a-58ff-b139-047be809d063",
+          "56a3b3ec-2c26-5121-aef9-8c1aa2f0edb9"
+        ],
+        "retrieved": [
+          "ind-rail",
+          "cons-retail",
+          "tech-cloud",
+          "tech-gpu",
+          "fin-broker"
+        ]
+      },
+      {
+        "query_id": "q17",
+        "category": "paraphrase",
+        "relevant": [
+          "tech-cyber"
+        ],
+        "retrieved_chunks": [
+          "dcd2b0e5-7877-5bc4-b898-6ecd53277258",
+          "3a892fd3-bfae-50cc-8979-92865556bca9",
+          "73823a44-5250-5cea-a4a2-ec47c8a5f759",
+          "608b62d3-f1f8-5d2a-90cb-2675aeffac2d",
+          "56a3b3ec-2c26-5121-aef9-8c1aa2f0edb9"
+        ],
+        "retrieved": [
+          "tech-cyber",
+          "tech-saas",
+          "tech-cpu",
+          "health-biosim",
+          "fin-broker"
+        ]
+      },
+      {
+        "query_id": "q18",
+        "category": "paraphrase",
+        "relevant": [
+          "tech-cloud"
+        ],
+        "retrieved_chunks": [
+          "85d52972-98c4-575d-9271-73cca390ae9c",
+          "b6852658-1829-52f9-b9b2-1df7e8a60c4b",
+          "73823a44-5250-5cea-a4a2-ec47c8a5f759",
+          "dcd2b0e5-7877-5bc4-b898-6ecd53277258",
+          "0e84f428-3870-5865-8245-7267ac3b3665"
+        ],
+        "retrieved": [
+          "tech-cloud",
+          "energy-lng",
+          "tech-cpu",
+          "tech-cyber",
+          "energy-wind"
+        ]
+      },
+      {
+        "query_id": "q19",
+        "category": "confusable",
+        "relevant": [
+          "energy-refinery"
+        ],
+        "retrieved_chunks": [
+          "3530eb44-7d5c-59ae-bd94-960f5d4db0be",
+          "3bea274a-9329-5a96-b0b0-82c7c4896e55",
+          "85d52972-98c4-575d-9271-73cca390ae9c",
+          "85ea45eb-2b16-5cc2-b85d-bc717dfc75e2",
+          "b6852658-1829-52f9-b9b2-1df7e8a60c4b"
+        ],
+        "retrieved": [
+          "energy-refinery",
+          "ind-chem",
+          "tech-cloud",
+          "energy-return",
+          "energy-lng"
+        ]
+      },
+      {
+        "query_id": "q20",
+        "category": "confusable",
+        "relevant": [
+          "energy-return"
+        ],
+        "retrieved_chunks": [
+          "85ea45eb-2b16-5cc2-b85d-bc717dfc75e2",
+          "56a3b3ec-2c26-5121-aef9-8c1aa2f0edb9",
+          "3530eb44-7d5c-59ae-bd94-960f5d4db0be",
+          "dcd2b0e5-7877-5bc4-b898-6ecd53277258",
+          "3bea274a-9329-5a96-b0b0-82c7c4896e55"
+        ],
+        "retrieved": [
+          "energy-return",
+          "fin-broker",
+          "energy-refinery",
+          "tech-cyber",
+          "ind-chem"
+        ]
+      },
+      {
+        "query_id": "q21",
+        "category": "confusable",
+        "relevant": [
+          "tech-cpu"
+        ],
+        "retrieved_chunks": [
+          "73823a44-5250-5cea-a4a2-ec47c8a5f759",
+          "dcd2b0e5-7877-5bc4-b898-6ecd53277258",
+          "56a3b3ec-2c26-5121-aef9-8c1aa2f0edb9",
+          "5574fca8-c09a-58ff-b139-047be809d063",
+          "85d52972-98c4-575d-9271-73cca390ae9c"
+        ],
+        "retrieved": [
+          "tech-cpu",
+          "tech-cyber",
+          "fin-broker",
+          "tech-gpu",
+          "tech-cloud"
+        ]
+      },
+      {
+        "query_id": "q22",
+        "category": "confusable",
+        "relevant": [
+          "tech-saas"
+        ],
+        "retrieved_chunks": [
+          "3a892fd3-bfae-50cc-8979-92865556bca9",
+          "dcd2b0e5-7877-5bc4-b898-6ecd53277258",
+          "608b62d3-f1f8-5d2a-90cb-2675aeffac2d",
+          "73823a44-5250-5cea-a4a2-ec47c8a5f759",
+          "56a3b3ec-2c26-5121-aef9-8c1aa2f0edb9"
+        ],
+        "retrieved": [
+          "tech-saas",
+          "tech-cyber",
+          "health-biosim",
+          "tech-cpu",
+          "fin-broker"
+        ]
+      },
+      {
+        "query_id": "q23",
+        "category": "confusable",
+        "relevant": [
+          "fin-card"
+        ],
+        "retrieved_chunks": [
+          "b8f45cd2-9df5-52d4-9a60-6e995f65aa4e",
+          "581220f0-a6f8-50f3-85f1-b9fdeebb54ac",
+          "56a3b3ec-2c26-5121-aef9-8c1aa2f0edb9",
+          "05c43ad9-4e2e-5e56-b182-26fa6121f023",
+          "0e84f428-3870-5865-8245-7267ac3b3665"
+        ],
+        "retrieved": [
+          "fin-card",
+          "cons-retail",
+          "fin-broker",
+          "fin-nim",
+          "energy-wind"
+        ]
+      },
+      {
+        "query_id": "q24",
+        "category": "confusable",
+        "relevant": [
+          "fin-aum"
+        ],
+        "retrieved_chunks": [
+          "096278c9-202b-572c-a200-69363e2bbf98",
+          "b8f45cd2-9df5-52d4-9a60-6e995f65aa4e",
+          "85d52972-98c4-575d-9271-73cca390ae9c",
+          "0e84f428-3870-5865-8245-7267ac3b3665",
+          "56a3b3ec-2c26-5121-aef9-8c1aa2f0edb9"
+        ],
+        "retrieved": [
+          "fin-aum",
+          "fin-card",
+          "tech-cloud",
+          "energy-wind",
+          "fin-broker"
+        ]
+      },
+      {
+        "query_id": "q25",
+        "category": "confusable",
+        "relevant": [
+          "cons-luxury"
+        ],
+        "retrieved_chunks": [
+          "c0c49d86-ae7d-569d-aaa8-7a643f58f0cf",
+          "56a3b3ec-2c26-5121-aef9-8c1aa2f0edb9",
+          "096278c9-202b-572c-a200-69363e2bbf98",
+          "85d52972-98c4-575d-9271-73cca390ae9c",
+          "581220f0-a6f8-50f3-85f1-b9fdeebb54ac"
+        ],
+        "retrieved": [
+          "cons-luxury",
+          "fin-broker",
+          "fin-aum",
+          "tech-cloud",
+          "cons-retail"
+        ]
+      },
+      {
+        "query_id": "q26",
+        "category": "confusable",
+        "relevant": [
+          "ind-aero"
+        ],
+        "retrieved_chunks": [
+          "87acd947-bded-54a2-aa9b-e36824acc473",
+          "85d52972-98c4-575d-9271-73cca390ae9c",
+          "3bea274a-9329-5a96-b0b0-82c7c4896e55",
+          "5574fca8-c09a-58ff-b139-047be809d063",
+          "73823a44-5250-5cea-a4a2-ec47c8a5f759"
+        ],
+        "retrieved": [
+          "ind-aero",
+          "tech-cloud",
+          "ind-chem",
+          "tech-gpu",
+          "tech-cpu"
+        ]
+      },
+      {
+        "query_id": "q27",
+        "category": "multi",
+        "relevant": [
+          "health-glp-price",
+          "health-glp-trial"
+        ],
+        "retrieved_chunks": [
+          "3e0c9824-1a7c-54e5-8334-8f49d6d4880f",
+          "7de691f5-4f16-5c3d-9f59-4079e6974f8b",
+          "608b62d3-f1f8-5d2a-90cb-2675aeffac2d",
+          "dcd2b0e5-7877-5bc4-b898-6ecd53277258",
+          "5574fca8-c09a-58ff-b139-047be809d063"
+        ],
+        "retrieved": [
+          "health-glp-price",
+          "health-glp-trial",
+          "health-biosim",
+          "tech-cyber",
+          "tech-gpu"
+        ]
+      },
+      {
+        "query_id": "q28",
+        "category": "multi",
+        "relevant": [
+          "energy-refinery",
+          "energy-return"
+        ],
+        "retrieved_chunks": [
+          "85ea45eb-2b16-5cc2-b85d-bc717dfc75e2",
+          "85d52972-98c4-575d-9271-73cca390ae9c",
+          "3530eb44-7d5c-59ae-bd94-960f5d4db0be",
+          "3bea274a-9329-5a96-b0b0-82c7c4896e55",
+          "56a3b3ec-2c26-5121-aef9-8c1aa2f0edb9"
+        ],
+        "retrieved": [
+          "energy-return",
+          "tech-cloud",
+          "energy-refinery",
+          "ind-chem",
+          "fin-broker"
+        ]
+      },
+      {
+        "query_id": "q29",
+        "category": "multi",
+        "relevant": [
+          "energy-solar",
+          "energy-wind"
+        ],
+        "retrieved_chunks": [
+          "0e84f428-3870-5865-8245-7267ac3b3665",
+          "07090204-c7a9-540f-ba9d-e7b85f04dbd9",
+          "85d52972-98c4-575d-9271-73cca390ae9c",
+          "3bea274a-9329-5a96-b0b0-82c7c4896e55",
+          "3530eb44-7d5c-59ae-bd94-960f5d4db0be"
+        ],
+        "retrieved": [
+          "energy-wind",
+          "energy-solar",
+          "tech-cloud",
+          "ind-chem",
+          "energy-refinery"
+        ]
+      },
+      {
+        "query_id": "q30",
+        "category": "multi",
+        "relevant": [
+          "tech-saas",
+          "tech-cyber"
+        ],
+        "retrieved_chunks": [
+          "dcd2b0e5-7877-5bc4-b898-6ecd53277258",
+          "608b62d3-f1f8-5d2a-90cb-2675aeffac2d",
+          "3a892fd3-bfae-50cc-8979-92865556bca9",
+          "56a3b3ec-2c26-5121-aef9-8c1aa2f0edb9",
+          "c8ee2f42-5303-5e07-9126-6d685d329ece"
+        ],
+        "retrieved": [
+          "tech-cyber",
+          "health-biosim",
+          "tech-saas",
+          "fin-broker",
+          "cons-ad"
+        ]
+      },
+      {
+        "query_id": "q31",
+        "category": "multi",
+        "relevant": [
+          "energy-refinery",
+          "ind-chem"
+        ],
+        "retrieved_chunks": [
+          "3bea274a-9329-5a96-b0b0-82c7c4896e55",
+          "85ea45eb-2b16-5cc2-b85d-bc717dfc75e2",
+          "3530eb44-7d5c-59ae-bd94-960f5d4db0be",
+          "0e84f428-3870-5865-8245-7267ac3b3665",
+          "b6852658-1829-52f9-b9b2-1df7e8a60c4b"
+        ],
+        "retrieved": [
+          "ind-chem",
+          "energy-return",
+          "energy-refinery",
+          "energy-wind",
+          "energy-lng"
+        ]
+      },
+      {
+        "query_id": "q32",
+        "category": "multi",
+        "relevant": [
+          "fin-broker",
+          "fin-aum"
+        ],
+        "retrieved_chunks": [
+          "096278c9-202b-572c-a200-69363e2bbf98",
+          "56a3b3ec-2c26-5121-aef9-8c1aa2f0edb9",
+          "85ea45eb-2b16-5cc2-b85d-bc717dfc75e2",
+          "85d52972-98c4-575d-9271-73cca390ae9c",
+          "608b62d3-f1f8-5d2a-90cb-2675aeffac2d"
+        ],
+        "retrieved": [
+          "fin-aum",
+          "fin-broker",
+          "energy-return",
+          "tech-cloud",
+          "health-biosim"
+        ]
+      },
+      {
+        "query_id": "q33",
+        "category": "ambiguous",
+        "relevant": [
+          "energy-refinery",
+          "energy-return"
+        ],
+        "retrieved_chunks": [
+          "85d52972-98c4-575d-9271-73cca390ae9c",
+          "85ea45eb-2b16-5cc2-b85d-bc717dfc75e2",
+          "3530eb44-7d5c-59ae-bd94-960f5d4db0be",
+          "b6852658-1829-52f9-b9b2-1df7e8a60c4b",
+          "3bea274a-9329-5a96-b0b0-82c7c4896e55"
+        ],
+        "retrieved": [
+          "tech-cloud",
+          "energy-return",
+          "energy-refinery",
+          "energy-lng",
+          "ind-chem"
+        ]
+      },
+      {
+        "query_id": "q34",
+        "category": "ambiguous",
+        "relevant": [
+          "tech-saas",
+          "tech-cyber"
+        ],
+        "retrieved_chunks": [
+          "dcd2b0e5-7877-5bc4-b898-6ecd53277258",
+          "3a892fd3-bfae-50cc-8979-92865556bca9",
+          "608b62d3-f1f8-5d2a-90cb-2675aeffac2d",
+          "3bea274a-9329-5a96-b0b0-82c7c4896e55",
+          "56a3b3ec-2c26-5121-aef9-8c1aa2f0edb9"
+        ],
+        "retrieved": [
+          "tech-cyber",
+          "tech-saas",
+          "health-biosim",
+          "ind-chem",
+          "fin-broker"
+        ]
+      },
+      {
+        "query_id": "q35",
+        "category": "ambiguous",
+        "relevant": [
+          "energy-solar",
+          "energy-wind"
+        ],
+        "retrieved_chunks": [
+          "0e84f428-3870-5865-8245-7267ac3b3665",
+          "07090204-c7a9-540f-ba9d-e7b85f04dbd9",
+          "3bea274a-9329-5a96-b0b0-82c7c4896e55",
+          "85ea45eb-2b16-5cc2-b85d-bc717dfc75e2",
+          "85d52972-98c4-575d-9271-73cca390ae9c"
+        ],
+        "retrieved": [
+          "energy-wind",
+          "energy-solar",
+          "ind-chem",
+          "energy-return",
+          "tech-cloud"
+        ]
+      },
+      {
+        "query_id": "q36",
+        "category": "ambiguous",
+        "relevant": [
+          "health-glp-price",
+          "health-biosim"
+        ],
+        "retrieved_chunks": [
+          "608b62d3-f1f8-5d2a-90cb-2675aeffac2d",
+          "3e0c9824-1a7c-54e5-8334-8f49d6d4880f",
+          "3bea274a-9329-5a96-b0b0-82c7c4896e55",
+          "7de691f5-4f16-5c3d-9f59-4079e6974f8b",
+          "c8ee2f42-5303-5e07-9126-6d685d329ece"
+        ],
+        "retrieved": [
+          "health-biosim",
+          "health-glp-price",
+          "ind-chem",
+          "health-glp-trial",
+          "cons-ad"
+        ]
+      },
+      {
+        "query_id": "q37",
+        "category": "unanswerable",
+        "relevant": [],
+        "retrieved_chunks": [
+          "85d52972-98c4-575d-9271-73cca390ae9c",
+          "608b62d3-f1f8-5d2a-90cb-2675aeffac2d",
+          "7de691f5-4f16-5c3d-9f59-4079e6974f8b",
+          "096278c9-202b-572c-a200-69363e2bbf98",
+          "dcd2b0e5-7877-5bc4-b898-6ecd53277258"
+        ],
+        "retrieved": [
+          "tech-cloud",
+          "health-biosim",
+          "health-glp-trial",
+          "fin-aum",
+          "tech-cyber"
+        ]
+      },
+      {
+        "query_id": "q38",
+        "category": "unanswerable",
+        "relevant": [],
+        "retrieved_chunks": [
+          "85ea45eb-2b16-5cc2-b85d-bc717dfc75e2",
+          "73823a44-5250-5cea-a4a2-ec47c8a5f759",
+          "dcd2b0e5-7877-5bc4-b898-6ecd53277258",
+          "3bea274a-9329-5a96-b0b0-82c7c4896e55",
+          "85d52972-98c4-575d-9271-73cca390ae9c"
+        ],
+        "retrieved": [
+          "energy-return",
+          "tech-cpu",
+          "tech-cyber",
+          "ind-chem",
+          "tech-cloud"
+        ]
+      },
+      {
+        "query_id": "q39",
+        "category": "unanswerable",
+        "relevant": [],
+        "retrieved_chunks": [
+          "85d52972-98c4-575d-9271-73cca390ae9c",
+          "85ea45eb-2b16-5cc2-b85d-bc717dfc75e2",
+          "0e84f428-3870-5865-8245-7267ac3b3665",
+          "56a3b3ec-2c26-5121-aef9-8c1aa2f0edb9",
+          "3bea274a-9329-5a96-b0b0-82c7c4896e55"
+        ],
+        "retrieved": [
+          "tech-cloud",
+          "energy-return",
+          "energy-wind",
+          "fin-broker",
+          "ind-chem"
+        ]
+      },
+      {
+        "query_id": "q40",
+        "category": "unanswerable",
+        "relevant": [],
+        "retrieved_chunks": [
+          "85ea45eb-2b16-5cc2-b85d-bc717dfc75e2",
+          "dcd2b0e5-7877-5bc4-b898-6ecd53277258",
+          "85d52972-98c4-575d-9271-73cca390ae9c",
+          "3bea274a-9329-5a96-b0b0-82c7c4896e55",
+          "7de691f5-4f16-5c3d-9f59-4079e6974f8b"
+        ],
+        "retrieved": [
+          "energy-return",
+          "tech-cyber",
+          "tech-cloud",
+          "ind-chem",
+          "health-glp-trial"
+        ]
+      },
+      {
+        "query_id": "q41",
+        "category": "unanswerable",
+        "relevant": [],
+        "retrieved_chunks": [
+          "6bcbf40a-057b-58ba-a12d-0475af7dd74e",
+          "b6852658-1829-52f9-b9b2-1df7e8a60c4b",
+          "56a3b3ec-2c26-5121-aef9-8c1aa2f0edb9",
+          "3bea274a-9329-5a96-b0b0-82c7c4896e55",
+          "c0c49d86-ae7d-569d-aaa8-7a643f58f0cf"
+        ],
+        "retrieved": [
+          "ind-rail",
+          "energy-lng",
+          "fin-broker",
+          "ind-chem",
+          "cons-luxury"
+        ]
+      },
+      {
+        "query_id": "q42",
+        "category": "unanswerable",
+        "relevant": [],
+        "retrieved_chunks": [
+          "85d52972-98c4-575d-9271-73cca390ae9c",
+          "85ea45eb-2b16-5cc2-b85d-bc717dfc75e2",
+          "3bea274a-9329-5a96-b0b0-82c7c4896e55",
+          "dcd2b0e5-7877-5bc4-b898-6ecd53277258",
+          "0e84f428-3870-5865-8245-7267ac3b3665"
+        ],
+        "retrieved": [
+          "tech-cloud",
+          "energy-return",
+          "ind-chem",
+          "tech-cyber",
+          "energy-wind"
+        ]
+      }
+    ]
+  }
+}

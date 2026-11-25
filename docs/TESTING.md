@@ -35,6 +35,7 @@ they **fail** instead, so CI can never pass silently without infrastructure.
 | `test_auth_flows.py` | Invitations (expiry, reuse, revocation, wrong email, manipulated institution/role), login, password reset (expiry, reuse, newest-only, rate limits, session revocation), logout revocation, tokens never logged, demo-seed guards |
 | `test_compliance_workflow.py` | End-to-end rule → portfolio → holdings → evaluation → violation → research → explanation, seeded demo yields its documented violations, rule API validation/authorization, research never changes a violation, determinism |
 | `test_llm_explanations.py` | Explanation endpoint with SubQ mocked: default path makes no external call; an authorized call keeps the deterministic figures and server-side citation metadata; an unknown citation is discarded |
+| `test_eval_smoke.py` | Full-text leg returns the calling tenant's chunk for an exact phrase. Not a semantic-quality measurement. See docs/EVALUATION.md |
 | `test_ingestion_and_retrieval.py` | Ingestion lifecycle (success, failure keeps the file, retry, duplicates, empty PDFs, idempotent re-runs), provider-down degradation to full text, embedding-space isolation, upload API, real Redis + RQ worker |
 
 ## Embedding tests
@@ -66,7 +67,8 @@ tokenizers 0.23.3, torch 2.15.0, model `BAAI/bge-small-en-v1.5` revision
 ## Not covered by automated tests
 
 * Hugging Face API with a real key (the client is tested against mocked responses).
-* SubQ with a real key (`tests/test_llm.py` mocks HTTP). `scripts/llm_preflight.py` is the opt-in live check; it has not been run against an account.
+* SubQ explanation quality against research excerpts. `tests/test_llm.py` mocks HTTP. A local preflight on 2026-11-25 listed `subq-savant-1.4` and returned the word `ready` for one synthetic prompt; that did not send research text.
+* The labeled retrieval comparison and the latency benchmark (`docs/EVALUATION.md`). CI runs the metric unit tests and one full-text smoke test, not those scripts.
 * Vercel Blob storage (local-disk storage is used in tests).
 * SMTP delivery (the `memory` backend is used; the SMTP code path is untested).
 * Browser-level UI behaviour.

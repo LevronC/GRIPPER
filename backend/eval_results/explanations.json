@@ -1,0 +1,315 @@
+{
+  "synthetic": true,
+  "live_provider_called": false,
+  "note": "Scripted model JSON exercises the validator. It is not a Savant quality measurement and it is not a claim of factual grounding.",
+  "requests_seen": 12,
+  "unexpected_host": false,
+  "other_tenant_text_in_output": false,
+  "deterministic": {
+    "cases": 12,
+    "compliance_unchanged": true,
+    "template_count": 12,
+    "llm_count": 0,
+    "fallback_count": 0,
+    "fallback_rate": 0.0,
+    "mean_latency_ms": 3.2609166666666667,
+    "scripted_model": false,
+    "live_provider": false,
+    "rows": [
+      {
+        "event_id": "5e888ad9-0518-50bb-9d3b-bbbda4350e47",
+        "latency_ms": 17.539,
+        "explanation_source": "template",
+        "fallback_reason": null,
+        "violation_status": "open",
+        "resolved_after": false,
+        "citation_ids": [],
+        "explanation": "EVAL01 is 8.0% of the portfolio; the single-position limit is 5.0%. This violation is open. It stays open until the holdings or the rule change and the portfolio is re-evaluated; retrieved research does not approve, exempt, or resolve it. 3 research excerpt(s) from your institution (EVAL01 Corp, EVAL07 Corp, EVAL11 Corp) matched a search for related context. They are shown for review; their releva",
+        "error": null
+      },
+      {
+        "event_id": "1deb07aa-6ab7-5a3d-94cd-ab6e51d8fe9b",
+        "latency_ms": 2.164,
+        "explanation_source": "template",
+        "fallback_reason": null,
+        "violation_status": "open",
+        "resolved_after": false,
+        "citation_ids": [],
+        "explanation": "EVAL02 is 8.0% of the portfolio; the single-position limit is 5.0%. This violation is open. It stays open until the holdings or the rule change and the portfolio is re-evaluated; retrieved research does not approve, exempt, or resolve it. 3 research excerpt(s) from your institution (EVAL02 Corp, EVAL07 Corp, EVAL11 Corp) matched a search for related context. They are shown for review; their releva",
+        "error": null
+      },
+      {
+        "event_id": "9fe6066d-85cd-5e44-befb-6a26c983d111",
+        "latency_ms": 2.154,
+        "explanation_source": "template",
+        "fallback_reason": null,
+        "violation_status": "open",
+        "resolved_after": false,
+        "citation_ids": [],
+        "explanation": "EVAL03 is 8.0% of the portfolio; the single-position limit is 5.0%. This violation is open. It stays open until the holdings or the rule change and the portfolio is re-evaluated; retrieved research does not approve, exempt, or resolve it. 3 research excerpt(s) from your institution (EVAL03 Corp, EVAL07 Corp, EVAL11 Corp) matched a search for related context. They are shown for review; their releva",
+        "error": null
+      },
+      {
+        "event_id": "c0382b6f-2ea4-5c07-93bc-5928bc43776f",
+        "latency_ms": 1.972,
+        "explanation_source": "template",
+        "fallback_reason": null,
+        "violation_status": "open",
+        "resolved_after": false,
+        "citation_ids": [],
+        "explanation": "EVAL04 is 8.0% of the portfolio; the single-position limit is 5.0%. This violation is open. It stays open until the holdings or the rule change and the portfolio is re-evaluated; retrieved research does not approve, exempt, or resolve it. 3 research excerpt(s) from your institution (EVAL04 Corp, EVAL07 Corp, EVAL11 Corp) matched a search for related context. They are shown for review; their releva",
+        "error": null
+      },
+      {
+        "event_id": "2107e85b-0a07-54aa-b3d6-62b259fb36b8",
+        "latency_ms": 1.909,
+        "explanation_source": "template",
+        "fallback_reason": null,
+        "violation_status": "open",
+        "resolved_after": false,
+        "citation_ids": [],
+        "explanation": "EVAL05 is 8.0% of the portfolio; the single-position limit is 5.0%. This violation is open. It stays open until the holdings or the rule change and the portfolio is re-evaluated; retrieved research does not approve, exempt, or resolve it. 3 research excerpt(s) from your institution (EVAL05 Corp, EVAL07 Corp, EVAL11 Corp) matched a search for related context. They are shown for review; their releva",
+        "error": null
+      },
+      {
+        "event_id": "f6eb3d76-44bc-5301-8e72-97d490b230f9",
+        "latency_ms": 2.067,
+        "explanation_source": "template",
+        "fallback_reason": null,
+        "violation_status": "open",
+        "resolved_after": false,
+        "citation_ids": [],
+        "explanation": "EVAL06 is 8.0% of the portfolio; the single-position limit is 5.0%. This violation is open. It stays open until the holdings or the rule change and the portfolio is re-evaluated; retrieved research does not approve, exempt, or resolve it. 3 research excerpt(s) from your institution (EVAL06 Corp, EVAL07 Corp, EVAL11 Corp) matched a search for related context. They are shown for review; their releva",
+        "error": null
+      },
+      {
+        "event_id": "9c8badc8-79e9-56b7-823f-28de8c407620",
+        "latency_ms": 1.795,
+        "explanation_source": "template",
+        "fallback_reason": null,
+        "violation_status": "open",
+        "resolved_after": false,
+        "citation_ids": [],
+        "explanation": "EVAL07 is 8.0% of the portfolio; the single-position limit is 5.0%. This violation is open. It stays open until the holdings or the rule change and the portfolio is re-evaluated; retrieved research does not approve, exempt, or resolve it. 3 research excerpt(s) from your institution (EVAL04 Corp, EVAL07 Corp, EVAL11 Corp) matched a search for related context. They are shown for review; their releva",
+        "error": null
+      },
+      {
+        "event_id": "302b7005-cfa8-5d0d-af40-bb6818d18a87",
+        "latency_ms": 1.845,
+        "explanation_source": "template",
+        "fallback_reason": null,
+        "violation_status": "open",
+        "resolved_after": false,
+        "citation_ids": [],
+        "explanation": "EVAL08 is 8.0% of the portfolio; the single-position limit is 5.0%. This violation is open. It stays open until the holdings or the rule change and the portfolio is re-evaluated; retrieved research does not approve, exempt, or resolve it. 3 research excerpt(s) from your institution (EVAL07 Corp, EVAL08 Corp, EVAL11 Corp) matched a search for related context. They are shown for review; their releva",
+        "error": null
+      },
+      {
+        "event_id": "14485d38-3b5a-5691-90f5-3fe475241ee1",
+        "latency_ms": 2.321,
+        "explanation_source": "template",
+        "fallback_reason": null,
+        "violation_status": "open",
+        "resolved_after": false,
+        "citation_ids": [],
+        "explanation": "EVAL09 is 8.0% of the portfolio; the single-position limit is 5.0%. This violation is open. It stays open until the holdings or the rule change and the portfolio is re-evaluated; retrieved research does not approve, exempt, or resolve it. 3 research excerpt(s) from your institution (EVAL07 Corp, EVAL09 Corp, EVAL11 Corp) matched a search for related context. They are shown for review; their releva",
+        "error": null
+      },
+      {
+        "event_id": "f2bf1ad9-36cf-5023-a11c-64a711be99b7",
+        "latency_ms": 1.751,
+        "explanation_source": "template",
+        "fallback_reason": null,
+        "violation_status": "open",
+        "resolved_after": false,
+        "citation_ids": [],
+        "explanation": "EVAL10 is 8.0% of the portfolio; the single-position limit is 5.0%. This violation is open. It stays open until the holdings or the rule change and the portfolio is re-evaluated; retrieved research does not approve, exempt, or resolve it. 3 research excerpt(s) from your institution (EVAL07 Corp, EVAL10 Corp, EVAL11 Corp) matched a search for related context. They are shown for review; their releva",
+        "error": null
+      },
+      {
+        "event_id": "11e5a3cb-566b-584c-b2d1-eea40b6b3bce",
+        "latency_ms": 1.856,
+        "explanation_source": "template",
+        "fallback_reason": null,
+        "violation_status": "open",
+        "resolved_after": false,
+        "citation_ids": [],
+        "explanation": "EVAL11 is 8.0% of the portfolio; the single-position limit is 5.0%. This violation is open. It stays open until the holdings or the rule change and the portfolio is re-evaluated; retrieved research does not approve, exempt, or resolve it. 3 research excerpt(s) from your institution (EVAL04 Corp, EVAL07 Corp, EVAL11 Corp) matched a search for related context. They are shown for review; their releva",
+        "error": null
+      },
+      {
+        "event_id": "b2357bbe-401c-5393-9bd5-e9ce32fbe090",
+        "latency_ms": 1.758,
+        "explanation_source": "template",
+        "fallback_reason": null,
+        "violation_status": "open",
+        "resolved_after": false,
+        "citation_ids": [],
+        "explanation": "EVAL12 is 8.0% of the portfolio; the single-position limit is 5.0%. This violation is open. It stays open until the holdings or the rule change and the portfolio is re-evaluated; retrieved research does not approve, exempt, or resolve it. 3 research excerpt(s) from your institution (EVAL07 Corp, EVAL11 Corp, EVAL12 Corp) matched a search for related context. They are shown for review; their releva",
+        "error": null
+      }
+    ]
+  },
+  "scripted": {
+    "cases": 12,
+    "compliance_unchanged": true,
+    "template_count": 4,
+    "llm_count": 8,
+    "fallback_count": 4,
+    "fallback_rate": 0.3333333333333333,
+    "mean_latency_ms": 2.818583333333333,
+    "scripted_model": true,
+    "live_provider": false,
+    "rows": [
+      {
+        "event_id": "5e888ad9-0518-50bb-9d3b-bbbda4350e47",
+        "latency_ms": 11.005,
+        "explanation_source": "llm",
+        "fallback_reason": null,
+        "violation_status": "open",
+        "resolved_after": false,
+        "citation_ids": [
+          "411a7874-f057-5ddd-903e-a11a5e1945ee"
+        ],
+        "explanation": "EVAL01 is 8.0% of the portfolio; the single-position limit is 5.0%. This violation is open. It stays open until the holdings or the rule change and the portfolio is re-evaluated; retrieved research does not approve, exempt, or resolve it. SYNTHETIC-NOTE 1 discusses the named position.",
+        "error": null
+      },
+      {
+        "event_id": "1deb07aa-6ab7-5a3d-94cd-ab6e51d8fe9b",
+        "latency_ms": 2.269,
+        "explanation_source": "llm",
+        "fallback_reason": null,
+        "violation_status": "open",
+        "resolved_after": false,
+        "citation_ids": [
+          "6941366a-7b7f-5ded-b9bb-8feca0a9ffdf"
+        ],
+        "explanation": "EVAL02 is 8.0% of the portfolio; the single-position limit is 5.0%. This violation is open. It stays open until the holdings or the rule change and the portfolio is re-evaluated; retrieved research does not approve, exempt, or resolve it. SYNTHETIC-NOTE 2 discusses the named position.",
+        "error": null
+      },
+      {
+        "event_id": "9fe6066d-85cd-5e44-befb-6a26c983d111",
+        "latency_ms": 2.019,
+        "explanation_source": "llm",
+        "fallback_reason": null,
+        "violation_status": "open",
+        "resolved_after": false,
+        "citation_ids": [
+          "34e90225-b476-51a1-b5f9-6fcd948eec9e"
+        ],
+        "explanation": "EVAL03 is 8.0% of the portfolio; the single-position limit is 5.0%. This violation is open. It stays open until the holdings or the rule change and the portfolio is re-evaluated; retrieved research does not approve, exempt, or resolve it. SYNTHETIC-NOTE 3 discusses the named position.",
+        "error": null
+      },
+      {
+        "event_id": "c0382b6f-2ea4-5c07-93bc-5928bc43776f",
+        "latency_ms": 1.934,
+        "explanation_source": "llm",
+        "fallback_reason": null,
+        "violation_status": "open",
+        "resolved_after": false,
+        "citation_ids": [
+          "ea9a3d05-da57-537a-be3c-3f6d76f0d57e"
+        ],
+        "explanation": "EVAL04 is 8.0% of the portfolio; the single-position limit is 5.0%. This violation is open. It stays open until the holdings or the rule change and the portfolio is re-evaluated; retrieved research does not approve, exempt, or resolve it. SYNTHETIC-NOTE 4 discusses the named position.",
+        "error": null
+      },
+      {
+        "event_id": "2107e85b-0a07-54aa-b3d6-62b259fb36b8",
+        "latency_ms": 1.928,
+        "explanation_source": "llm",
+        "fallback_reason": null,
+        "violation_status": "open",
+        "resolved_after": false,
+        "citation_ids": [
+          "e82a3c61-57bc-561b-b90c-c449cbc7408a"
+        ],
+        "explanation": "EVAL05 is 8.0% of the portfolio; the single-position limit is 5.0%. This violation is open. It stays open until the holdings or the rule change and the portfolio is re-evaluated; retrieved research does not approve, exempt, or resolve it. SYNTHETIC-NOTE 5 discusses the named position.",
+        "error": null
+      },
+      {
+        "event_id": "f6eb3d76-44bc-5301-8e72-97d490b230f9",
+        "latency_ms": 2.267,
+        "explanation_source": "llm",
+        "fallback_reason": null,
+        "violation_status": "open",
+        "resolved_after": false,
+        "citation_ids": [
+          "37d9a478-a8bb-5b99-852d-67a609f68e18"
+        ],
+        "explanation": "EVAL06 is 8.0% of the portfolio; the single-position limit is 5.0%. This violation is open. It stays open until the holdings or the rule change and the portfolio is re-evaluated; retrieved research does not approve, exempt, or resolve it. SYNTHETIC-NOTE 6 discusses the named position.",
+        "error": null
+      },
+      {
+        "event_id": "9c8badc8-79e9-56b7-823f-28de8c407620",
+        "latency_ms": 1.923,
+        "explanation_source": "llm",
+        "fallback_reason": null,
+        "violation_status": "open",
+        "resolved_after": false,
+        "citation_ids": [
+          "b7779e63-7813-5455-a5ab-d32e66913853"
+        ],
+        "explanation": "EVAL07 is 8.0% of the portfolio; the single-position limit is 5.0%. This violation is open. It stays open until the holdings or the rule change and the portfolio is re-evaluated; retrieved research does not approve, exempt, or resolve it. SYNTHETIC-NOTE 7 discusses the named position.",
+        "error": null
+      },
+      {
+        "event_id": "302b7005-cfa8-5d0d-af40-bb6818d18a87",
+        "latency_ms": 2.042,
+        "explanation_source": "llm",
+        "fallback_reason": null,
+        "violation_status": "open",
+        "resolved_after": false,
+        "citation_ids": [
+          "5080e6b6-69e4-5428-a73b-1342204734b5"
+        ],
+        "explanation": "EVAL08 is 8.0% of the portfolio; the single-position limit is 5.0%. This violation is open. It stays open until the holdings or the rule change and the portfolio is re-evaluated; retrieved research does not approve, exempt, or resolve it. SYNTHETIC-NOTE 8 discusses the named position.",
+        "error": null
+      },
+      {
+        "event_id": "14485d38-3b5a-5691-90f5-3fe475241ee1",
+        "latency_ms": 2.366,
+        "explanation_source": "template",
+        "fallback_reason": "invalid_citations",
+        "violation_status": "open",
+        "resolved_after": false,
+        "citation_ids": [],
+        "explanation": "EVAL09 is 8.0% of the portfolio; the single-position limit is 5.0%. This violation is open. It stays open until the holdings or the rule change and the portfolio is re-evaluated; retrieved research does not approve, exempt, or resolve it. 3 research excerpt(s) from your institution (EVAL07 Corp, EVAL09 Corp, EVAL11 Corp) matched a search for related context. They are shown for review; their releva",
+        "error": null
+      },
+      {
+        "event_id": "f2bf1ad9-36cf-5023-a11c-64a711be99b7",
+        "latency_ms": 2.019,
+        "explanation_source": "template",
+        "fallback_reason": "invalid_citations",
+        "violation_status": "open",
+        "resolved_after": false,
+        "citation_ids": [],
+        "explanation": "EVAL10 is 8.0% of the portfolio; the single-position limit is 5.0%. This violation is open. It stays open until the holdings or the rule change and the portfolio is re-evaluated; retrieved research does not approve, exempt, or resolve it. 3 research excerpt(s) from your institution (EVAL07 Corp, EVAL10 Corp, EVAL11 Corp) matched a search for related context. They are shown for review; their releva",
+        "error": null
+      },
+      {
+        "event_id": "11e5a3cb-566b-584c-b2d1-eea40b6b3bce",
+        "latency_ms": 2.085,
+        "explanation_source": "template",
+        "fallback_reason": "invalid_output",
+        "violation_status": "open",
+        "resolved_after": false,
+        "citation_ids": [],
+        "explanation": "EVAL11 is 8.0% of the portfolio; the single-position limit is 5.0%. This violation is open. It stays open until the holdings or the rule change and the portfolio is re-evaluated; retrieved research does not approve, exempt, or resolve it. 3 research excerpt(s) from your institution (EVAL04 Corp, EVAL07 Corp, EVAL11 Corp) matched a search for related context. They are shown for review; their releva",
+        "error": null
+      },
+      {
+        "event_id": "b2357bbe-401c-5393-9bd5-e9ce32fbe090",
+        "latency_ms": 1.966,
+        "explanation_source": "template",
+        "fallback_reason": "invalid_output",
+        "violation_status": "open",
+        "resolved_after": false,
+        "citation_ids": [],
+        "explanation": "EVAL12 is 8.0% of the portfolio; the single-position limit is 5.0%. This violation is open. It stays open until the holdings or the rule change and the portfolio is re-evaluated; retrieved research does not approve, exempt, or resolve it. 3 research excerpt(s) from your institution (EVAL07 Corp, EVAL11 Corp, EVAL12 Corp) matched a search for related context. They are shown for review; their releva",
+        "error": null
+      }
+    ]
+  },
+  "git_revision": "ebc60e42dc2e3bfd08c403f5b75d958a561a4089"
+}
