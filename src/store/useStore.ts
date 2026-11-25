@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import { apiUrl } from '../lib/api';
-import { DEFAULT_INSTITUTIONS } from '../lib/defaultInstitutions';
 
 export interface Institution {
   id: string;
@@ -80,8 +79,7 @@ interface GripperState {
   setPortfolio: (p: Portfolio) => Promise<void>;
   
   // Auth Actions
-    login: (email: string, password: string, instId: string) => Promise<{ ok: boolean; error?: string }>;
-  register: (email: string, password: string, instId: string, role: string, graduationYear?: number) => Promise<{ success: boolean; error?: string }>;
+  login: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
   logout: () => void;
 
   fetchInstitutions: () => Promise<void>;
@@ -107,16 +105,15 @@ try {
 }
 
 export const useStore = create<GripperState>((set, get) => {
-  // Helper to construct headers with auth token and institution ID context
-  const getHeaders = (instId?: string) => {
+  // The backend derives the institution from the token; no tenant header is sent.
+  // The instId argument is kept only so existing call sites stay unchanged.
+  const getHeaders = (_instId?: string) => {
+    void _instId;
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
     if (get().token) {
       headers['Authorization'] = `Bearer ${get().token}`;
-    }
-    if (instId) {
-      headers['X-Institution-ID'] = instId;
     }
     return headers;
   };
@@ -155,25 +152,16 @@ export const useStore = create<GripperState>((set, get) => {
     },
 
     // Auth Actions
-    login: async (email, password, instId) => {
+    login: async (email, password) => {
       set({ isLoading: true });
       try {
         const res = await fetch(apiUrl('/auth/login'), {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Institution-ID': instId
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email, password })
         });
         if (res.ok) {
           const data = await res.json();
-          if (instId && data.institution_id !== instId) {
-            return {
-              ok: false,
-              error: 'Selected institution does not match your account. Choose the institution you registered with.',
-            };
-          }
           localStorage.setItem('gripper_token', data.access_token);
           const userPayload = {
             id: data.user_id,
@@ -183,54 +171,15 @@ export const useStore = create<GripperState>((set, get) => {
             graduation_year: data.graduation_year ?? null
           };
           localStorage.setItem('gripper_user', JSON.stringify(userPayload));
-          
-          set({ 
-            token: data.access_token, 
-            currentUser: userPayload 
-          });
-
+          set({ token: data.access_token, currentUser: userPayload });
           await get().fetchInstitutions();
           return { ok: true };
         }
-        const err = await res.json().catch(() => ({ detail: 'Invalid credentials.' }));
-        return {
-          ok: false,
-          error: typeof err.detail === 'string' ? err.detail : 'Invalid credentials. Check your password, verification status, or institution selection.',
-        };
+        if (res.status === 429) return { ok: false, error: 'Too many attempts. Wait a few minutes and try again.' };
+        return { ok: false, error: 'Incorrect email or password.' };
       } catch (err) {
         console.error('Login error', err);
-        return { ok: false, error: 'Network connection failed. Is the backend running on port 8000?' };
-      } finally {
-        set({ isLoading: false });
-      }
-    },
-
-    register: async (email, password, instId, role, graduationYear) => {
-      set({ isLoading: true });
-      try {
-        const res = await fetch(apiUrl('/auth/register'), {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Institution-ID': instId
-          },
-          body: JSON.stringify({
-            email,
-            password,
-            institution_id: instId,
-            role,
-            graduation_year: graduationYear || null
-          })
-        });
-        if (res.ok) {
-          return { success: true };
-        } else {
-          const data = await res.json();
-          return { success: false, error: data.detail || 'Registration failed.' };
-        }
-      } catch (err) {
-        console.error('Registration error', err);
-        return { success: false, error: 'Network connection failed.' };
+        return { ok: false, error: 'Network connection failed. Is the backend running?' };
       } finally {
         set({ isLoading: false });
       }
@@ -260,37 +209,24 @@ export const useStore = create<GripperState>((set, get) => {
     },
 
     fetchInstitutions: async () => {
+      if (!get().token) return;
       set({ isLoading: true });
       try {
-        const res = await fetch(apiUrl('/institutions'));
-        if (res.ok) {
-          const data = await res.json();
-          // Keep sign-in usable while the API is starting or unavailable. The
-          // defaults mirror the backend seed data and are replaced whenever a
-          // valid institution response is available.
-          const institutions = Array.isArray(data) && data.length > 0
-            ? data
-            : DEFAULT_INSTITUTIONS;
-          set({ institutions });
-          
-          // Auto-select logged-in user's institution first, or default to first
-          const user = get().currentUser;
-          if (user) {
-            const userInst = institutions.find((i: Institution) => i.id === user.institution_id);
-            if (userInst) {
-              await get().setInstitution(userInst);
-              return;
-            }
-          }
-          if (institutions.length > 0 && !get().currentInstitution) {
-            await get().setInstitution(institutions[0]);
-          }
-        } else {
-          set({ institutions: DEFAULT_INSTITUTIONS });
+        // Returns only the signed-in user's institution.
+        const res = await fetch(apiUrl('/institutions'), { headers: getHeaders() });
+        if (res.status === 401) {
+          // Token expired or revoked (e.g. after a password reset).
+          get().logout();
+          return;
+        }
+        if (!res.ok) return;
+        const institutions: Institution[] = await res.json();
+        set({ institutions });
+        if (institutions.length > 0 && !get().currentInstitution) {
+          await get().setInstitution(institutions[0]);
         }
       } catch (err) {
         console.error('Failed to fetch institutions', err);
-        set({ institutions: DEFAULT_INSTITUTIONS });
       } finally {
         set({ isLoading: false });
       }

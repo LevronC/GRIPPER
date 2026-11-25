@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { 
   LayoutDashboard, 
   ShieldAlert, 
@@ -10,18 +9,12 @@ import {
   Sparkles, 
   Plus, 
   Trash2, 
-  CheckCircle, 
   Database,
-  Building,
   Upload,
   Cpu,
   Clock,
   LogOut,
-  Lock,
-  Mail,
-  UserPlus,
   ShieldCheck,
-  ChevronRight,
   Fingerprint,
   Zap,
   Activity,
@@ -42,7 +35,7 @@ import { useStore } from '../store/useStore';
 import type { Holding, Violation } from '../store/useStore';
 import ExplainabilityDrawer from './ExplainabilityDrawer';
 import { apiUrl } from '../lib/api';
-import { routes } from '../lib/routes';
+import AuthPanel from './AuthPanel';
 
 // Static metadata of sectors for mapping
 const SECTORS = ['Technology', 'Financials', 'Consumer Cyclical', 'Energy', 'Healthcare', 'Communication Services', 'Other'];
@@ -111,7 +104,6 @@ export default function GripperDashboard() {
   const {
     token,
     currentUser,
-    institutions,
     currentInstitution,
     currentPortfolio,
     holdings,
@@ -125,14 +117,10 @@ export default function GripperDashboard() {
     fetchInstitutions,
     evaluateCompliance,
     saveHoldings,
-    login,
-    register,
     logout,
     simulateCompliance,
     fetchDocuments
   } = useStore();
-
-  const [searchParams] = useSearchParams();
 
   const [selectedViolation, setSelectedViolation] = useState<Violation | null>(null);
 
@@ -155,17 +143,6 @@ export default function GripperDashboard() {
   const [newWeight, setNewWeight] = useState(5);
   const [newCostBasis, setNewCostBasis] = useState(100);
 
-  // Auth local state
-  const [authMode, setAuthMode] = useState<'login' | 'register' | 'verify'>('login');
-  const [authEmail, setAuthEmail] = useState('');
-  const [authPassword, setAuthPassword] = useState('');
-  const [authInstId, setAuthInstId] = useState('');
-  const [authRole, setAuthRole] = useState('analyst');
-  const [authGradYear, setAuthGradYear] = useState<number | ''>('');
-  const [authCode, setAuthCode] = useState('');
-  const [authError, setAuthError] = useState('');
-  const [authSuccess, setAuthSuccess] = useState('');
-
   // Sandbox simulation local state
   const [simulationActive, setSimulationActive] = useState(false);
   const [simulationTriggered, setSimulationTriggered] = useState(false);
@@ -180,17 +157,10 @@ export default function GripperDashboard() {
   const [transcribing, setTranscribing] = useState(false);
   const [transcript, setTranscript] = useState<string | null>(null);
 
-  // Load initial institutions
+  // Load the signed-in user's institution
   useEffect(() => {
-    fetchInstitutions();
-  }, [fetchInstitutions]);
-
-  useEffect(() => {
-    const mode = searchParams.get('mode');
-    if (mode === 'register') setAuthMode('register');
-    else if (mode === 'verify') setAuthMode('verify');
-    else setAuthMode('login');
-  }, [searchParams]);
+    if (token) fetchInstitutions();
+  }, [token, fetchInstitutions]);
 
   // Update holdings draft when global holdings change
   useEffect(() => {
@@ -198,8 +168,6 @@ export default function GripperDashboard() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setHoldingsDraft(holdings);
   }, [holdings]);
-
-  const selectedAuthInstId = authInstId || institutions[0]?.id || '';
 
   // Poll document ingestion progress periodically if there are pending docs
   useEffect(() => {
@@ -214,61 +182,6 @@ export default function GripperDashboard() {
 
     return () => clearInterval(interval);
   }, [token, currentInstitution, fetchDocuments]);
-
-  // Handle Auth submission
-  const handleAuthSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthError('');
-    setAuthSuccess('');
-
-    if (authMode === 'login') {
-      if (!selectedAuthInstId) {
-        setAuthError('Please select an institution context.');
-        return;
-      }
-      const result = await login(authEmail, authPassword, selectedAuthInstId);
-      if (!result.ok) {
-        setAuthError(result.error || 'Login failed. Check your credentials and institution.');
-      }
-    } else if (authMode === 'register') {
-      if (!selectedAuthInstId) {
-        setAuthError('Please select an institution context.');
-        return;
-      }
-      const res = await register(
-        authEmail, 
-        authPassword, 
-        selectedAuthInstId, 
-        authRole, 
-        authGradYear === '' ? undefined : authGradYear
-      );
-      if (res.success) {
-        setAuthSuccess('Registration successful! Check the backend console for your 6-digit verification code, then verify below.');
-        setAuthMode('verify');
-      } else {
-        setAuthError(res.error || 'Registration failed. Make sure the email ends in .edu and is unique.');
-      }
-    } else {
-      // Verification mode
-      try {
-        const res = await fetch(apiUrl('/auth/verify'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: authEmail, code: authCode })
-        });
-        if (res.ok) {
-          setAuthSuccess('Verification successful! You can now log in.');
-          setAuthMode('login');
-          setAuthPassword('');
-        } else {
-          const data = await res.json();
-          setAuthError(data.detail || 'Verification failed.');
-        }
-      } catch {
-        setAuthError('Network error during verification.');
-      }
-    }
-  };
 
   // Handle document upload
   const handleUpload = async (e: React.FormEvent) => {
@@ -451,245 +364,7 @@ export default function GripperDashboard() {
 
   // AUTH SCREEN COMPONENT
   if (!token) {
-    return (
-      <div className="flex min-h-screen w-full items-center justify-center bg-[#05070A] font-sans text-slate-100 relative overflow-hidden">
-        {/* Glowing background highlights inspired by high-end dashboards */}
-        <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] rounded-full bg-cyan-600/10 blur-[150px]" />
-        <div className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] rounded-full bg-blue-600/10 blur-[150px]" />
-
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.95 }} 
-          animate={{ opacity: 1, scale: 1 }} 
-          transition={{ duration: 0.4 }}
-          className="w-full max-w-[420px] bg-[#0A0D14]/90 backdrop-blur-3xl border border-white/5 p-10 rounded-[2.5rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.6)] z-10"
-        >
-          {/* Logo and title */}
-          <div className="text-center mb-10">
-            <motion.div 
-              whileHover={{ rotate: 180 }}
-              transition={{ duration: 0.8 }}
-              className="mx-auto w-16 h-16 bg-gradient-to-tr from-cyan-500 to-blue-600 rounded-3xl flex items-center justify-center shadow-[0_0_30px_-5px_rgba(34,211,238,0.3)] mb-6"
-            >
-              <Fingerprint size={32} className="text-white" />
-            </motion.div>
-            <h2 className="text-3xl font-black tracking-tighter text-white mb-2">
-              GRIPPER<span className="text-cyan-400 font-normal">.terminal</span>
-            </h2>
-            <p className="text-xs text-slate-500 font-medium uppercase tracking-[0.2em]">
-              Security & Compliance Vault
-            </p>
-          </div>
-
-          {/* Form */}
-          <form onSubmit={handleAuthSubmit} className="space-y-5">
-            <AnimatePresence mode="wait">
-              {authMode !== 'verify' ? (
-                <motion.div
-                  key="main-auth"
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 10 }}
-                  className="space-y-4"
-                >
-                  {/* Institution dropdown */}
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 px-1">
-                      <Building size={12} className="text-cyan-500/70" />
-                      Infrastructure Node
-                    </label>
-                    <select
-                      value={selectedAuthInstId}
-                      onChange={(e) => setAuthInstId(e.target.value)}
-                      className="w-full bg-white/[0.03] border border-white/10 rounded-2xl py-3 px-4 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all appearance-none cursor-pointer"
-                    >
-                      {institutions.length === 0 ? (
-                        <option value="" className="bg-[#0A0D14]">
-                          No institutions — start backend and seed data
-                        </option>
-                      ) : (
-                        institutions.map((inst) => (
-                          <option key={inst.id} value={inst.id} className="bg-[#0A0D14]">
-                            {inst.name}
-                          </option>
-                        ))
-                      )}
-                    </select>
-                    {institutions.length === 0 && (
-                      <p className="text-[10px] text-amber-400/80 px-1 leading-relaxed">
-                        Run the backend and create an institution via POST /institutions or see{' '}
-                        <Link to={routes.docs} className="underline hover:text-cyan-400">
-                          docs
-                        </Link>
-                        .
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Email input */}
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 px-1">
-                      <Mail size={12} className="text-cyan-500/70" />
-                      Academic ID (.edu)
-                    </label>
-                    <input
-                      type="email"
-                      required
-                      value={authEmail}
-                      onChange={(e) => setAuthEmail(e.target.value)}
-                      placeholder="analyst@stetson.edu"
-                      className="w-full bg-white/[0.03] border border-white/10 rounded-2xl py-3 px-4 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all"
-                    />
-                  </div>
-
-                  {/* Password input */}
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 px-1">
-                      <Lock size={12} className="text-cyan-500/70" />
-                      Encryption Key
-                    </label>
-                    <input
-                      type="password"
-                      required
-                      value={authPassword}
-                      onChange={(e) => setAuthPassword(e.target.value)}
-                      placeholder="••••••••••••"
-                      className="w-full bg-white/[0.03] border border-white/10 rounded-2xl py-3 px-4 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all"
-                    />
-                  </div>
-
-                  {authMode === 'register' && (
-                    <motion.div 
-                      initial={{ opacity: 0, height: 0 }} 
-                      animate={{ opacity: 1, height: 'auto' }} 
-                      className="space-y-4 pt-1"
-                    >
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 px-1">
-                          <UserPlus size={12} className="text-cyan-500/70" />
-                          Clearance Level
-                        </label>
-                        <select
-                          value={authRole}
-                          onChange={(e) => setAuthRole(e.target.value)}
-                          className="w-full bg-white/[0.03] border border-white/10 rounded-2xl py-3 px-4 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 appearance-none transition-all cursor-pointer"
-                        >
-                          <option value="analyst" className="bg-[#0A0D14]">Research Analyst</option>
-                          <option value="sector_lead" className="bg-[#0A0D14]">Sector Lead</option>
-                          <option value="pm" className="bg-[#0A0D14]">Portfolio Manager (PM)</option>
-                          <option value="admin" className="bg-[#0A0D14]">Systems Administrator</option>
-                        </select>
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 px-1">
-                          <CheckCircle size={12} className="text-cyan-500/70" />
-                          Graduation Year
-                        </label>
-                        <input
-                          type="number"
-                          min="2024"
-                          max="2045"
-                          value={authGradYear}
-                          onChange={(e) => setAuthGradYear(e.target.value === '' ? '' : Number(e.target.value))}
-                          placeholder="2027"
-                          className="w-full bg-white/[0.03] border border-white/10 rounded-2xl py-3 px-4 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all"
-                        />
-                      </div>
-                    </motion.div>
-                  )}
-                </motion.div>
-              ) : (
-                <motion.div
-                  key="verify-auth"
-                  initial={{ opacity: 0, x: 10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -10 }}
-                  className="space-y-4"
-                >
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 px-1">
-                      <ShieldCheck size={12} className="text-cyan-500/70" />
-                      Verification Code
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      maxLength={6}
-                      value={authCode}
-                      onChange={(e) => setAuthCode(e.target.value)}
-                      placeholder="000000"
-                      className="w-full bg-white/[0.03] border border-white/10 rounded-2xl py-4 px-4 text-center text-2xl font-black tracking-[0.5em] text-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all"
-                    />
-                    <p className="text-[10px] text-center text-slate-500 mt-2">
-                      In development, the 6-digit code is printed in the backend server logs.
-                    </p>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {authError && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-4 bg-red-500/5 border border-red-500/20 text-red-400 rounded-2xl text-[11px] font-medium leading-relaxed">
-                {authError}
-              </motion.div>
-            )}
-
-            {authSuccess && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-4 bg-cyan-500/5 border border-cyan-500/20 text-cyan-400 rounded-2xl text-[11px] font-medium leading-relaxed">
-                {authSuccess}
-              </motion.div>
-            )}
-
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full py-4 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 disabled:opacity-50 text-white rounded-2xl text-sm font-black tracking-wide transition-all shadow-[0_20px_40px_-10px_rgba(8,145,178,0.3)] cursor-pointer flex items-center justify-center gap-3 active:scale-[0.98]"
-            >
-              {isLoading ? (
-                <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              ) : (
-                <>
-                  {authMode === 'login' ? 'ESTABLISH LINK' : authMode === 'register' ? 'CREATE SECURE NODE' : 'VERIFY IDENTITY'}
-                  <ChevronRight size={18} />
-                </>
-              )}
-            </button>
-          </form>
-
-          {/* Switcher */}
-          <div className="text-center mt-8 space-y-4">
-            <button
-              type="button"
-              onClick={() => {
-                setAuthMode(authMode === 'login' ? 'register' : 'login');
-                setAuthError('');
-                setAuthSuccess('');
-              }}
-              className="text-[11px] text-slate-500 hover:text-cyan-400 font-bold tracking-wider transition-colors uppercase"
-            >
-              {authMode === 'login' 
-                ? "Request New Access Node" 
-                : 'Already have credentials? Link Hub'}
-            </button>
-            <div>
-              <Link
-                to={routes.home}
-                className="text-[11px] text-slate-500 hover:text-cyan-400 font-bold tracking-wider transition-colors uppercase"
-              >
-                ← Back to site
-              </Link>
-            </div>
-            <div>
-              <Link
-                to={routes.docs}
-                className="text-[11px] text-slate-500 hover:text-cyan-400 font-bold tracking-wider transition-colors uppercase"
-              >
-                Read documentation
-              </Link>
-            </div>
-          </div>
-        </motion.div>
-      </div>
-    );
+    return <AuthPanel />;
   }
 
   // MAIN DASHBOARD LAYOUT

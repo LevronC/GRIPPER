@@ -52,13 +52,13 @@ export function Navbar() {
 
         <div className="hidden items-center gap-3 sm:flex">
           <Link
-            to={terminalPath('login')}
+            to={terminalPath()}
             className="text-sm text-ink-muted transition-colors hover:text-ink"
           >
             Log in
           </Link>
           <Link
-            to={terminalPath('register')}
+            to={terminalPath()}
             className="pill-btn bg-accent text-accent-ink shadow-lg shadow-accent/20 hover:bg-accent-bright"
           >
             Open terminal
@@ -92,10 +92,10 @@ export function Navbar() {
               Docs
             </Link>
             <div className="mt-4 flex flex-col gap-3 border-t border-white/10 pt-4">
-              <Link to={terminalPath('login')} className="text-ink-muted">
+              <Link to={terminalPath()} className="text-ink-muted">
                 Log in
               </Link>
-              <Link to={terminalPath('register')} className="pill-btn bg-accent text-accent-ink">
+              <Link to={terminalPath()} className="pill-btn bg-accent text-accent-ink">
                 Open terminal
               </Link>
             </div>

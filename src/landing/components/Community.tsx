@@ -10,7 +10,7 @@ export function Community() {
         <h2 className="font-display fluid-headline font-normal text-ink">{community.title}</h2>
         <p className="mx-auto mt-5 max-w-2xl fluid-subhead text-ink-muted">{community.subtitle}</p>
         <Link
-          to={terminalPath('login')}
+          to={terminalPath()}
           className="pill-btn mt-10 bg-accent text-accent-ink hover:bg-accent-bright"
         >
           {community.cta}

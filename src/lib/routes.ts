@@ -3,14 +3,11 @@ export const routes = {
   home: '/',
   terminal: '/app',
   terminalLogin: '/app?mode=login',
-  terminalRegister: '/app?mode=register',
   docs: '/docs',
   apiDocs: '/api/docs',
 } as const
 
-export type AuthMode = 'login' | 'register' | 'verify'
-
-export function terminalPath(mode?: AuthMode): string {
-  if (!mode || mode === 'login') return routes.terminalLogin
-  return `${routes.terminal}?mode=${mode}`
+/** Accounts are invitation-only; the terminal always opens on the sign-in screen. */
+export function terminalPath(): string {
+  return routes.terminalLogin
 }

@@ -23,7 +23,7 @@ export function SiteHeader({ scrolled = true }: SiteHeaderProps) {
             Docs
           </Link>
           <Link
-            to={terminalPath('login')}
+            to={terminalPath()}
             className="pill-btn bg-accent text-accent-ink shadow-lg shadow-accent/20 hover:bg-accent-bright"
           >
             Open terminal

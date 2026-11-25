@@ -21,21 +21,23 @@ const sections = [
   {
     id: 'auth',
     title: 'Authentication',
-    body: 'Registration requires a valid .edu email address. After signup, verify your account with the 6-digit code printed to the backend console in development (or delivered by email in production). Login issues a JWT stored in localStorage as gripper_token.',
+    body: 'There is no public sign-up. An institution administrator invites a user by email; the invitation fixes the institution and role, expires after 72 hours, and works once. Password resets use single-use links valid for 30 minutes. Both require configured email delivery (EMAIL_BACKEND=smtp); without it these features return 503 rather than exposing tokens. Login issues a JWT stored in localStorage as gripper_token.',
     items: [
-      'POST /auth/register — create account (requires institution_id, role, .edu email)',
-      'POST /auth/verify — confirm email with 6-digit code',
+      'POST /admin/invitations — admin invites an email address with a role (own institution only)',
+      'POST /auth/invitations/accept — redeem an invitation and set a password',
       'POST /auth/login — receive JWT access token',
-      'POST /auth/logout — revoke token via Redis blacklist',
+      'POST /auth/password-reset/request, /confirm — emailed single-use reset link; revokes existing sessions',
+      'POST /auth/logout — revoke token via Redis blacklist (no-op without Redis)',
     ],
   },
   {
     id: 'roles',
     title: 'User roles',
     items: [
-      'analyst — upload research, run semantic search',
-      'sector_lead / pm — manage holdings and compliance evaluation',
-      'faculty / trustee / admin — elevated governance access',
+      'analyst / sector_lead / pm / admin — upload research and run semantic search',
+      'sector_lead / pm / admin — edit holdings; pm / admin — create portfolios',
+      'faculty / trustee — read-only portfolio and compliance views (no research search)',
+      'admin — invitations, role changes, IPS rules for their own institution',
     ],
   },
   {
@@ -54,7 +56,7 @@ const sections = [
     id: 'api',
     title: 'Key API endpoints',
     items: [
-      'GET /institutions — list tenants (public for signup dropdown)',
+      "GET /institutions — the signed-in user's institution",
       'GET /portfolios — list portfolios for current institution',
       'POST /portfolios/{id}/evaluate — run IPS compliance check',
       'POST /documents/upload — queue PDF ingestion (analyst+ roles)',
@@ -65,7 +67,7 @@ const sections = [
   {
     id: 'rls',
     title: 'Row-Level Security',
-    body: 'Every authenticated request sets SET LOCAL app.current_institution_id from the JWT user record. PostgreSQL RLS policies filter all tenant tables automatically, preventing cross-institution data leakage even if application code omits a filter.',
+    body: 'The institution is derived from the authenticated user, never from the request. Application code filters every lookup by that institution, and PostgreSQL RLS policies enforce the same boundary independently: each transaction sets app.current_institution_id with a transaction-local set_config, and the API connects as a role that cannot bypass RLS. See docs/DATABASE_SECURITY.md.',
   },
   {
     id: 'environment',

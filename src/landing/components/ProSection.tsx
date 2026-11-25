@@ -13,7 +13,7 @@ export function ProSection() {
           <h2 className="mt-3 font-display fluid-headline font-normal text-ink">{proTier.title}</h2>
           <p className="mt-5 fluid-subhead text-ink-muted">{proTier.subtitle}</p>
           <Link
-            to={terminalPath('register')}
+            to={terminalPath()}
             className="pill-btn mt-8 bg-accent text-accent-ink hover:bg-accent-bright"
           >
             {proTier.cta}

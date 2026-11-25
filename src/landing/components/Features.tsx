@@ -19,7 +19,7 @@ export function Features() {
               <h2 className="font-display fluid-headline font-normal text-ink">{block.title}</h2>
               <p className="mt-5 max-w-lg fluid-subhead text-ink-muted">{block.body}</p>
               <Link
-                to={terminalPath('login')}
+                to={terminalPath()}
                 className="pill-btn mt-8 bg-accent text-accent-ink hover:bg-accent-bright"
               >
                 {block.cta}

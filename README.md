@@ -4,7 +4,7 @@ Multi-tenant investment compliance and semantic intelligence platform for studen
 
 [![CI](https://github.com/LevronC/GRIPPER/actions/workflows/ci.yml/badge.svg)](https://github.com/LevronC/GRIPPER/actions/workflows/ci.yml)
 
-**Live demo:** [gripper-ten.vercel.app/app](https://gripper-ten.vercel.app/app) · Demo credentials in [docs/DEMO.md](docs/DEMO.md)
+**Live deployment:** [gripper-ten.vercel.app](https://gripper-ten.vercel.app). There are no shared public credentials; see [docs/DEMO.md](docs/DEMO.md) for a local synthetic demo.
 
 ![Gripper Risk Terminal preview](docs/screenshots/dashboard-preview.svg)
 
@@ -15,7 +15,6 @@ Multi-tenant investment compliance and semantic intelligence platform for studen
 | `/` | Marketing landing page |
 | `/docs` | Developer and administrator documentation |
 | `/app` | Authenticated compliance terminal (login required) |
-| `/app?mode=register` | Open terminal in registration mode |
 | `/api/docs` | FastAPI OpenAPI reference (backend must be running) |
 
 ## Quick start
@@ -62,23 +61,18 @@ npm run dev
 
 Open [http://localhost:5173](http://localhost:5173). Vite proxies `/api` → `http://localhost:8000`.
 
-### 5. Register and log in
+### 5. Sign in
 
-Default institutions (Stetson, UF, RGIP Demo) are seeded on API startup. To try immediately, see [docs/DEMO.md](docs/DEMO.md).
-
-1. Visit `/app?mode=register`
-2. Use a `.edu` email, select your institution, and choose a role
-3. Copy the 6-digit verification code from the **backend console**
-4. Verify, then log in at `/app`
+Nothing is seeded automatically. For a local synthetic institution with demo accounts,
+run `scripts/seed_demo.py` (see [docs/DEMO.md](docs/DEMO.md)); it refuses to run in production.
 
 ## Authentication flow
 
-- **Register** → `POST /auth/register` (`.edu` email required)
-- **Verify** → `POST /auth/verify` with 6-digit code
-- **Login** → `POST /auth/login` returns JWT (`gripper_token` in localStorage)
-- **Logout** → `POST /auth/logout` blacklists token + clears session
-
-The selected institution at login must match the institution on your account.
+- **No public sign-up.** Admins invite users: `POST /admin/invitations` → emailed single-use link → `POST /auth/invitations/accept`. The invitation fixes institution and role.
+- **Login** → `POST /auth/login` returns a JWT (`gripper_token` in localStorage)
+- **Password reset** → `POST /auth/password-reset/request` / `confirm` (emailed 30-minute single-use link; revokes existing sessions)
+- **Logout** → `POST /auth/logout` blacklists the token when Redis is configured
+- New institutions are provisioned by an operator: `scripts/provision_institution.py`
 
 ## Project structure
 
@@ -126,7 +120,8 @@ Set production environment variables in Vercel:
 | `MIGRATION_DATABASE_URL` | For migrations | Owner connection used only by `alembic upgrade head` and `scripts/`. Do not reuse it as `DATABASE_URL`. |
 | `REDIS_URL` | Optional | Token blacklist + RQ (`redis://` or `rediss://`) |
 | `SECRET_KEY` | Yes | JWT signing key, at least 32 characters |
-| `SEED_DEMO_USER` | No | Leave `false` in production |
+| `EMAIL_BACKEND` + `SMTP_*` | For invitations/reset | `smtp` to enable; default `disabled` makes those endpoints return 503 |
+| `APP_BASE_URL` | With email | Frontend origin used in invitation/reset links |
 | `VITE_API_BASE_URL` | No | Defaults to `/api` on Vercel |
 
 Run migrations and create the runtime role as a deploy step (see

@@ -1,36 +1,30 @@
-# Demo access
+# Local demo (synthetic data)
 
-Demo credentials are for **development, preview, and evaluation only**. Do not use these passwords in production.
+Gripper no longer seeds any account automatically, and there are no shared public
+credentials. The previous behaviour (a demo analyst with a password published in this
+repository, created on every API start, inside tenants named after real universities)
+was removed because anyone could sign in to the deployed app with it.
 
-## Live demo
+## Create a synthetic demo locally
 
-**URL:** https://gripper-ten.vercel.app/app
+```bash
+cd backend
+export ENVIRONMENT=development
+export MIGRATION_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/gripper
+export DEMO_PASSWORD='pick-a-local-passphrase'   # optional; otherwise one is generated and printed once
+python scripts/seed_demo.py
+```
 
-## Seeded demo account
+This creates the institution **"Synthetic Demo Fund (not a real institution)"** (`synthetic-demo`)
+with an admin, a PM and an analyst account. All data is fictional.
 
-When `SEED_DEMO_USER=true` (default in local dev and production), the API seeds:
+The script refuses to run when `ENVIRONMENT=production`, when `VERCEL=1`, or against a
+non-local database host (override the host check with `--allow-remote-db` for a disposable
+staging database; production is never allowed).
 
-| Field | Value |
-|-------|--------|
-| Institution | Stetson University |
-| Email | `analyst@stetson.edu` |
-| Password | `Gripp3rDemo!` |
-| Role | analyst (verified) |
+## A public demo, safely
 
-## Default institutions
-
-| Institution | Slug |
-|-------------|------|
-| Stetson University | `stetson` |
-| University of Florida | `uf` |
-| RGIP Demo Program | `rgip-demo` |
-
-## Register your own account
-
-1. Open `/app?mode=register`
-2. Use a `.edu` email and select your institution
-3. Complete email verification (6-digit code is logged to the backend console in dev; check Vercel logs in production until email delivery is configured)
-
-## Disabling demo seed in production
-
-Set `SEED_DEMO_USER=false` in Vercel environment variables to stop seeding the shared demo password on startup. Institutions are still seeded.
+If you want a public demo deployment, use a **separate** Vercel project and database
+that contain only synthetic data. Create accounts there with `scripts/provision_institution.py`
+or invitations, rotate the passwords periodically, and never point it at a database that
+holds real institutional data.

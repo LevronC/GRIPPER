@@ -26,7 +26,7 @@ export function Hero() {
           </p>
           <div className="mt-10 flex flex-wrap items-center justify-center gap-4 lg:justify-start">
             <Link
-              to={terminalPath('login')}
+              to={terminalPath()}
               className="pill-btn min-w-[160px] bg-accent text-accent-ink shadow-lg shadow-accent/25 hover:bg-accent-bright"
             >
               {hero.cta}

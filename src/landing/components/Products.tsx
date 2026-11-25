@@ -32,7 +32,7 @@ export function Products() {
             <h2 className="font-display fluid-headline font-normal">{current.title}</h2>
             <p className="mt-5 max-w-xl fluid-subhead text-accent-ink/75">{current.body}</p>
             <Link
-              to={terminalPath('login')}
+              to={terminalPath()}
               className="pill-btn mt-8 border border-accent-ink/20 bg-transparent text-accent-ink hover:bg-accent-ink/5"
             >
               Explore capability
