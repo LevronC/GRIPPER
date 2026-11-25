@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 
-import fitz
+import pymupdf
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
@@ -38,7 +38,7 @@ def test_health_db_reports_rls_enforced_for_restricted_role(db_urls):
 
 
 def _make_pdf(path, body: str) -> None:
-    doc = fitz.open()
+    doc = pymupdf.open()
     page = doc.new_page()
     page.insert_text((72, 72), body)
     doc.save(str(path))

@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import uuid
 
-import fitz
+import pymupdf
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
@@ -29,10 +29,10 @@ def api():
 
 
 def _pdf(path, body: str = BODY, pages: int = 2) -> str:
-    doc = fitz.open()
+    doc = pymupdf.open()
     for i in range(pages):
         page = doc.new_page()
-        page.insert_textbox(fitz.Rect(36, 36, 560, 800), f"Page {i + 1}. {body}" if body else "", fontsize=8)
+        page.insert_textbox(pymupdf.Rect(36, 36, 560, 800), f"Page {i + 1}. {body}" if body else "", fontsize=8)
     doc.save(str(path))
     doc.close()
     return str(path)
@@ -137,7 +137,7 @@ def test_retry_rules(api, owner_engine, two_tenants, tmp_path):
 def test_empty_pdf_fails_with_clear_reason(owner_engine, two_tenants, tmp_path):
     a = two_tenants.a
     path = str(tmp_path / "empty.pdf")
-    doc = fitz.open()
+    doc = pymupdf.open()
     doc.new_page()
     doc.save(path)
     doc.close()
@@ -327,11 +327,11 @@ def test_queue_mode_with_real_rq_worker(api, owner_engine, two_tenants, tmp_path
 # ── Phase 2: source integrity, stable ids, partial failures ─────────────────
 
 def _pages_pdf(path, texts):
-    doc = fitz.open()
+    doc = pymupdf.open()
     for body in texts:
         page = doc.new_page()
         if body:
-            page.insert_textbox(fitz.Rect(36, 36, 560, 800), body, fontsize=8)
+            page.insert_textbox(pymupdf.Rect(36, 36, 560, 800), body, fontsize=8)
     doc.save(str(path))
     doc.close()
     return str(path)

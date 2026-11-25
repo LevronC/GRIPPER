@@ -20,7 +20,7 @@ import subprocess
 import sys
 import uuid
 
-import fitz
+import pymupdf
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
@@ -87,9 +87,9 @@ DISTRACTOR = ("Visitor guide for the regional botanical garden: opening hours, t
 
 
 def _pdf(path, body: str = RESEARCH) -> bytes:
-    doc = fitz.open()
+    doc = pymupdf.open()
     page = doc.new_page()
-    page.insert_textbox(fitz.Rect(36, 36, 560, 800), body * 3, fontsize=9)
+    page.insert_textbox(pymupdf.Rect(36, 36, 560, 800), body * 3, fontsize=9)
     doc.save(str(path))
     doc.close()
     return open(path, "rb").read()

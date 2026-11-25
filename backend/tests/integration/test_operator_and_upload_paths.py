@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import uuid
 
-import fitz
+import pymupdf
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
@@ -20,8 +20,8 @@ def api():
 
 
 def _pdf_bytes(body: str) -> bytes:
-    doc = fitz.open()
-    doc.new_page().insert_textbox(fitz.Rect(36, 36, 560, 800), body, fontsize=9)
+    doc = pymupdf.open()
+    doc.new_page().insert_textbox(pymupdf.Rect(36, 36, 560, 800), body, fontsize=9)
     data = doc.tobytes()
     doc.close()
     return data
