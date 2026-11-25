@@ -1,23 +1,27 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, ShieldAlert, Sparkles, FileText, Bookmark, Info } from 'lucide-react';
+import { X, ShieldAlert, FileText, Bookmark, Info, ListChecks } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import type { Violation } from '../store/useStore';
 import { apiUrl } from '../lib/api';
 
 interface Evidence {
+  chunk_id: string;
   report_id: string;
-  page: number;
+  page: number | null;
   content: string;
-  similarity: number;
+  retrieval_score: number | null;
   sector: string;
   company: string;
 }
 
 interface ExplanationResult {
   message: string;
-  compliance_status: string;
-  ai_explanation_draft: string;
+  /** From the deterministic evaluator only. Research never changes it. */
+  violation_status: 'open' | 'resolved';
+  research_status: 'found' | 'none' | 'unavailable';
+  explanation: string;
+  explanation_source: 'template';
   evidence: Evidence[];
 }
 
@@ -46,7 +50,6 @@ export default function ExplainabilityDrawer({ violation, institutionId, onClose
         const res = await fetch(apiUrl(`/violations/${violation.id}/explain`), {
           method: 'POST',
           headers: {
-            'X-Institution-ID': institutionId,
             'Authorization': `Bearer ${token || ''}`
           }
         });
@@ -55,10 +58,10 @@ export default function ExplainabilityDrawer({ violation, institutionId, onClose
           setResult(data);
         } else {
           const errData = await res.json();
-          setError(errData.detail || 'Failed to retrieve exception justification.');
+          setError(errData.detail || 'Failed to load the violation explanation.');
         }
       } catch (err) {
-        setError('Network error trying to fetch RAG exception data.');
+        setError('Network error while loading the violation explanation.');
         console.error(err);
       } finally {
         setLoading(false);
@@ -99,7 +102,7 @@ export default function ExplainabilityDrawer({ violation, institutionId, onClose
                 </div>
                 <div>
                   <h3 className="font-bold text-lg tracking-tight">Compliance Justification</h3>
-                  <p className="text-xs text-slate-400 font-medium">Audit RAG Precedent Explorer</p>
+                  <p className="text-xs text-slate-400 font-medium">Violation explanation</p>
                 </div>
               </div>
               <button 
@@ -154,11 +157,11 @@ export default function ExplainabilityDrawer({ violation, institutionId, onClose
                 )}
               </div>
 
-              {/* RAG Content Loading / Error / Display */}
+              {/* Explanation Loading / Error / Display */}
               <div className="space-y-4">
                 <h4 className="font-semibold text-slate-300 flex items-center gap-2 text-sm uppercase tracking-wider">
-                  <Sparkles size={16} className="text-blue-400" />
-                  RAG Retrieval Report
+                  <ListChecks size={16} className="text-blue-400" />
+                  Explanation &amp; related research
                 </h4>
 
                 {loading && (
@@ -178,42 +181,42 @@ export default function ExplainabilityDrawer({ violation, institutionId, onClose
 
                 {!loading && !error && result && (
                   <div className="space-y-6">
-                    {/* Status Banner */}
+                    {/* Status Banner: compliance status comes from the rule engine only */}
                     <div className={`p-4 rounded-xl border text-sm flex gap-3 ${
-                      result.compliance_status === 'retrieval_justified'
-                        ? 'bg-emerald-950/30 border-emerald-800/40 text-emerald-300'
+                      result.violation_status === 'open'
+                        ? 'bg-red-950/20 border-red-900/40 text-red-300'
                         : 'bg-slate-850 border-slate-850 text-slate-300'
                     }`}>
                       <Bookmark size={18} className="shrink-0 mt-0.5" />
                       <div>
-                        <div className="font-bold capitalize">
-                          {result.compliance_status === 'retrieval_justified' 
-                            ? 'Approved Exception Precedent Found' 
-                            : 'No IPS Exception Documented'}
+                        <div className="font-bold">
+                          {result.violation_status === 'open' ? 'Violation open' : 'Violation resolved'}
                         </div>
                         <p className="text-xs text-slate-400 mt-1">
-                          {result.compliance_status === 'retrieval_justified'
-                            ? 'A qualitative investment committee exception has been semantically matched to this position.'
-                            : 'No recent board reports or analyst buy proposals explain this overweight allocation.'}
+                          {result.research_status === 'found'
+                            ? 'Related research was found for context. It does not approve or exempt this violation.'
+                            : result.research_status === 'none'
+                              ? 'No research in your institution matched this violation.'
+                              : 'Research search was unavailable.'}
                         </p>
                       </div>
                     </div>
 
-                    {/* AI Draft Rationale */}
-                    <div className="p-5 bg-gradient-to-r from-blue-950/20 to-slate-900 border border-blue-900/30 rounded-2xl space-y-3">
-                      <div className="flex items-center gap-1.5 text-xs font-bold text-blue-400 uppercase tracking-wider">
-                        <Sparkles size={12} />
-                        AI synthesized draft rationale
+                    {/* Rule-based explanation (fixed template, no language model) */}
+                    <div className="p-5 bg-slate-900 border border-slate-800 rounded-2xl space-y-3">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400 uppercase tracking-wider">
+                        <ListChecks size={12} />
+                        Rule-based explanation
                       </div>
-                      <p className="text-sm text-slate-200 italic leading-relaxed">
-                        "{result.ai_explanation_draft}"
+                      <p className="text-sm text-slate-200 leading-relaxed">
+                        {result.explanation}
                       </p>
                     </div>
 
                     {/* Evidence Citations */}
                     <div className="space-y-3">
                       <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
-                        Source Memos & Citations ({result.evidence.length})
+                        Related research excerpts ({result.evidence.length})
                       </span>
 
                       {result.evidence.length === 0 ? (
@@ -223,14 +226,14 @@ export default function ExplainabilityDrawer({ violation, institutionId, onClose
                       ) : (
                         <div className="space-y-3">
                           {result.evidence.map((ev, i) => (
-                            <div key={i} className="p-4 bg-slate-900 border border-slate-800 hover:border-slate-750 rounded-xl space-y-3 transition-colors">
+                            <div key={ev.chunk_id ?? i} className="p-4 bg-slate-900 border border-slate-800 hover:border-slate-750 rounded-xl space-y-3 transition-colors">
                               <div className="flex justify-between items-center text-xs">
                                 <span className="font-semibold text-blue-400 flex items-center gap-1">
                                   <FileText size={12} />
                                   {ev.company} ({ev.sector})
                                 </span>
                                 <span className="bg-slate-800 text-slate-400 px-2 py-0.5 rounded font-mono">
-                                  Sim: {(ev.similarity * 100).toFixed(1)}% | Page {ev.page}
+                                  {ev.page != null ? `Page ${ev.page}` : 'Page n/a'}
                                 </span>
                               </div>
                               <p className="text-xs text-slate-400 leading-relaxed font-mono whitespace-pre-line bg-slate-950/50 p-2.5 rounded border border-slate-850">

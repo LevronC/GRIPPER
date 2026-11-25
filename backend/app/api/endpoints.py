@@ -4,10 +4,10 @@ import os
 import uuid
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, File, Form, Request, UploadFile
+from fastapi import APIRouter, Body, Depends, HTTPException, File, Form, Request, UploadFile
 from sqlalchemy import select, and_, func, text
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 try:
     from rq import Queue
 except ImportError:
@@ -23,6 +23,7 @@ from app.schemas.document import SemanticSearchRequest
 from app.services.retrieval.searcher import search_documents
 from app.services.governance.evaluator import evaluate_portfolio_compliance, simulate_portfolio_compliance
 from app.services.governance.explain import generate_violation_explanation
+from app.services.governance.holdings import validate_holdings_set
 from app.api.deps import CurrentUser, RoleChecker
 from app.api.tenancy import require_governance_event, require_portfolio
 from app.core.rbac import COMPLIANCE_ROLES, READ_ROLES, RESEARCH_ROLES, SIMULATION_ROLES
@@ -318,19 +319,20 @@ def explain_violation(
 
 
 class HoldingSimulation(BaseModel):
-    ticker: str
-    weight: float
-    cost_basis: Optional[float] = 100.0
-    conviction_score: Optional[int] = None
+    ticker: str = Field(..., pattern=r"^[A-Za-z0-9.\-]{1,12}$")
+    weight: float = Field(..., ge=0.0, le=1.0)
+    cost_basis: Optional[float] = Field(100.0, ge=0.0)
+    conviction_score: Optional[int] = Field(None, ge=1, le=10)
 
 
 @router.post("/portfolios/{portfolio_id}/simulate")
 def simulate_portfolio(
     portfolio_id: uuid.UUID,
-    holdings_data: List[HoldingSimulation],
+    holdings_data: List[HoldingSimulation] = Body(..., max_length=500),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(RoleChecker(SIMULATION_ROLES)),
 ):
+    validate_holdings_set([h.ticker for h in holdings_data], [h.weight for h in holdings_data])
     institution_id = current_user.institution_id
     require_portfolio(db, portfolio_id, institution_id)
     try:

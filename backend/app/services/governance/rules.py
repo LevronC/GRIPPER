@@ -24,7 +24,11 @@ TICKER_METADATA: Dict[str, Dict[str, Any]] = {
 def get_ticker_metadata(ticker: str) -> Dict[str, Any]:
     """
     Returns sector and market cap classification for a ticker symbol.
-    Defaults to Technology / mega-cap for unknown symbols.
+
+    Limitation: classification comes from the static TICKER_METADATA table above.
+    Unknown symbols are classified as sector "Other", market-cap class "large", so
+    they count toward the "Other" sector cap and are never treated as micro-caps by
+    the liquidity rule.
     """
     upper_ticker = ticker.upper().strip()
     return TICKER_METADATA.get(upper_ticker, {
@@ -35,8 +39,9 @@ def get_ticker_metadata(ticker: str) -> Dict[str, Any]:
 
 def normalize_threshold(threshold: float) -> float:
     """
-    Ensures thresholds are consistently represented as decimals.
-    E.g. both 10.0 (10%) and 0.10 (10%) map to 0.10.
+    Legacy compatibility: rows created before the IPS rule API may store percentages
+    (10.0 meaning 10%). Values > 1 are divided by 100. The API only accepts fractions
+    in (0, 1], so new rules are never ambiguous.
     """
     if threshold > 1.0:
         return threshold / 100.0

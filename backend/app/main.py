@@ -4,7 +4,7 @@ import uuid
 from contextlib import asynccontextmanager
 from typing import List, Optional
 
-from fastapi import FastAPI, Depends, HTTPException, Request, Response
+from fastapi import Body, FastAPI, Depends, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
 from pydantic import BaseModel, Field
@@ -13,9 +13,11 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from app.api.admin import router as admin_router
+from app.api.rules import router as rules_router
 from app.api.auth import router as auth_router
 from app.api.deps import CurrentUser, RoleChecker
 from app.api.tenancy import require_portfolio
+from app.services.governance.holdings import validate_holdings_set
 from app.core.rbac import (
     ADMIN_ROLES,
     INVITABLE_ROLES,
@@ -97,6 +99,7 @@ app.add_middleware(
 
 app.include_router(auth_router)
 app.include_router(admin_router)
+app.include_router(rules_router)
 app.include_router(api_router)
 
 
@@ -236,19 +239,21 @@ def list_portfolio_holdings(
 
 
 class HoldingUpdate(BaseModel):
-    ticker: str
-    weight: float
-    cost_basis: float
-    conviction_score: Optional[int] = None
+    ticker: str = Field(..., pattern=r"^[A-Za-z0-9.\-]{1,12}$")
+    weight: float = Field(..., ge=0.0, le=1.0, description="Portfolio weight as a fraction (0.05 = 5%)")
+    cost_basis: float = Field(..., ge=0.0)
+    conviction_score: Optional[int] = Field(None, ge=1, le=10)
+
 
 
 @app.post("/portfolios/{portfolio_id}/holdings")
 def update_portfolio_holdings(
     portfolio_id: uuid.UUID,
-    holdings_data: List[HoldingUpdate],
+    holdings_data: List[HoldingUpdate] = Body(..., max_length=500),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(RoleChecker(HOLDINGS_WRITE_ROLES)),
 ):
+    validate_holdings_set([h.ticker for h in holdings_data], [h.weight for h in holdings_data])
     require_portfolio(db, portfolio_id, current_user.institution_id)
     db.query(models.Holding).filter(models.Holding.portfolio_id == portfolio_id).delete()
     new_holdings = [
@@ -264,26 +269,6 @@ def update_portfolio_holdings(
     db.add_all(new_holdings)
     db.commit()
     return {"status": "success", "count": len(new_holdings)}
-
-
-@app.get("/ips_rules")
-def list_ips_rules(
-    db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(RoleChecker(READ_ROLES)),
-):
-    rules = db.execute(
-        select(models.IPSRule).where(models.IPSRule.institution_id == current_user.institution_id)
-    ).scalars().all()
-    return [
-        {
-            "id": str(r.id),
-            "institution_id": str(r.institution_id),
-            "rule_type": r.rule_type,
-            "threshold": r.threshold,
-            "severity": r.severity,
-        }
-        for r in rules
-    ]
 
 
 # ── User management (admin only) ──────────────────────────────────────────────

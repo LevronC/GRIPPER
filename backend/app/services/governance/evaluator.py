@@ -79,16 +79,17 @@ def evaluate_portfolio_compliance(
     )
     db_active_events = db.execute(active_events_stmt).scalars().all()
     
-    # Create comparison keys for active events in DB
-    # Key helper: (rule_id, holding_id, event_type, sector_or_ticker)
+    # Identity of a breach: (rule, type, ticker-or-sector). holding_id is deliberately
+    # NOT part of the key: saving holdings replaces the rows (new ids), and the same
+    # ticker over the same cap is the same ongoing breach, not a new one.
     def get_event_key(event: Any) -> tuple:
         details = event.details_json
         ticker_or_sector = details.get("ticker") or details.get("sector") or ""
-        return (event.rule_id, event.holding_id, event.event_type, ticker_or_sector)
-        
+        return (event.rule_id, event.event_type, ticker_or_sector)
+
     def get_violation_key(v: dict) -> tuple:
         ticker_or_sector = v.get("ticker") or v.get("sector") or ""
-        return (v.get("rule_id"), v.get("holding_id"), v["type"], ticker_or_sector)
+        return (v.get("rule_id"), v["type"], ticker_or_sector)
         
     db_active_map = {get_event_key(e): e for e in db_active_events}
     detected_map = {get_violation_key(v): v for v in detected_violations}
@@ -102,7 +103,7 @@ def evaluate_portfolio_compliance(
             db_event.resolved = True
             db_event.resolved_at = now
             dispatch_resolution_alert(db_event)
-            logger.info(f"[Governance] Resolved breach: {db_event.event_type} on {key[3]}")
+            logger.info("[Governance] Resolved breach: %s on %s", db_event.event_type, key[2])
             
     # - Handle Active or New Violations
     active_results = []
@@ -119,6 +120,8 @@ def evaluate_portfolio_compliance(
                 **({"tickers": v["tickers"]} if "tickers" in v else {})
             }
             db_event.severity = v["severity"]
+            if v.get("holding_id"):
+                db_event.holding_id = v["holding_id"]
             active_results.append(db_event)
         else:
             # Create a new governance breach record
