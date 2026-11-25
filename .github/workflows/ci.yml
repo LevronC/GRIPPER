@@ -115,7 +115,7 @@ jobs:
       - name: Verify runtime role cannot bypass RLS
         run: python scripts/check_db_role.py > /dev/null
       - name: Integration tests (real Postgres + pgvector + Redis, restricted role)
-        run: pytest tests -m integration -v --tb=short
+        run: pytest tests -m "integration and not model" -v --tb=short
 
   model-tests:
     name: Real embedding model tests (manual)
