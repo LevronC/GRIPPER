@@ -14,6 +14,7 @@ claim that the commentary is hallucination-free.
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import sys
@@ -233,6 +234,12 @@ def _summarize(rows: list[dict], *, scripted: bool) -> dict:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--out", default="eval_results/phase4b/explanations")
+    args = parser.parse_args()
+    out = Path(BACKEND) / args.out
+    if out.with_suffix(".json").exists() or out.with_suffix(".md").exists():
+        raise SystemExit("Output exists; choose a new --out to preserve previous results.")
     admin = ensure_database(os.environ.get("MIGRATION_DATABASE_URL") or "", replace=False)
     runtime = require_local_database(os.environ.get("DATABASE_URL") or "", "DATABASE_URL")
     upgrade(admin)
@@ -268,7 +275,6 @@ def main() -> int:
         "scripted": {**_summarize(scripted, scripted=True), "rows": scripted},
         "git_revision": git_revision(),
     }
-    out = Path(BACKEND) / "eval_results" / "explanations"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.with_suffix(".json").write_text(json.dumps(payload, indent=2) + "\n")
     out.with_suffix(".md").write_text(_markdown(payload))
