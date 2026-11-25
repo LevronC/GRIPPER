@@ -27,6 +27,8 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 _BLOB_API = "https://blob.vercel-storage.com"
+# Matches @vercel/blob 2.9.0 (BLOB_API_VERSION), whose del() is POST /delete {"urls": [...]}.
+_BLOB_API_VERSION = "13"
 
 
 def _is_blob_url(ref: str) -> bool:
@@ -139,15 +141,17 @@ def _download_from_vercel_blob(blob_url: str) -> bytes:
 
 def _delete_from_vercel_blob(blob_url: str) -> None:
     """
-    Deletes a blob via the Vercel Blob DELETE API.
+    Deletes a blob the way @vercel/blob's del() does: POST /delete with {"urls": [...]}.
+    (An HTTP DELETE to /delete returns 404, which left every uploaded PDF in place.)
     """
     delete_url = f"{_BLOB_API}/delete"
     payload = json.dumps({"urls": [blob_url]}).encode()
     headers = {
         "Authorization": f"Bearer {settings.BLOB_READ_WRITE_TOKEN}",
         "Content-Type": "application/json",
+        "x-api-version": _BLOB_API_VERSION,
     }
-    req = urllib.request.Request(delete_url, data=payload, headers=headers, method="DELETE")
+    req = urllib.request.Request(delete_url, data=payload, headers=headers, method="POST")
     try:
         urllib.request.urlopen(req, timeout=10)
         logger.info("Deleted blob: %s", blob_url)

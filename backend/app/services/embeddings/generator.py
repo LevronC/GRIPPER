@@ -187,7 +187,33 @@ def _hash_embed(text: str) -> List[float]:
     return [v / norm for v in vector] if norm else [1.0] + [0.0] * (EMBEDDING_DIM - 1)
 
 
+# Outcome of the most recent provider call in this process, for /health. Serverless
+# instances keep separate copies; "unverified" means this instance has not called yet.
+_LAST_PROVIDER_CALL: dict = {"state": "unverified", "reason": None, "at": None}
+
+
+def embedding_status() -> dict:
+    """Copy of the last observed provider outcome: state is ok, failing or unverified."""
+    return dict(_LAST_PROVIDER_CALL)
+
+
+def _record_provider_call(state: str, reason: Optional[str]) -> None:
+    from datetime import datetime, timezone
+
+    _LAST_PROVIDER_CALL.update(state=state, reason=reason, at=datetime.now(timezone.utc).isoformat())
+
+
 def _embed(space: EmbeddingSpace, texts: List[str]) -> List[List[float]]:
+    try:
+        vectors = _embed_unrecorded(space, texts)
+    except EmbeddingUnavailable as exc:
+        _record_provider_call("failing", str(exc)[:200])
+        raise
+    _record_provider_call("ok", None)
+    return vectors
+
+
+def _embed_unrecorded(space: EmbeddingSpace, texts: List[str]) -> List[List[float]]:
     if space.provider == "local":
         vectors = _local_embed(texts)
     elif space.provider == "hf_api":

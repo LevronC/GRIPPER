@@ -217,8 +217,10 @@ def test_health_reports_capabilities(api, monkeypatch):
     caps = api.get("/health").json()["capabilities"]
     assert caps["semantic_search"] is False and caps["retrieval_mode"] == "full_text_only" and caps["embedding"] is None
     assert set(caps) == {
-        "semantic_search", "retrieval_mode", "embedding", "ingestion_mode", "email_delivery", "llm",
+        "semantic_search", "retrieval_mode", "embedding", "embedding_provider", "ingestion_mode",
+        "email_delivery", "llm",
     }
+    assert caps["embedding_provider"]["state"] == "not_configured"
     assert caps["llm"] == {
         "provider": "none",
         "external_processing_enabled": False,

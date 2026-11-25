@@ -136,17 +136,22 @@ def health_check():
     """
     from app.api.endpoints import ingestion_mode
     from app.core.email import email_delivery_available
-    from app.services.embeddings.generator import active_space
+    from app.services.embeddings.generator import active_space, embedding_status
     from app.services.llm.config import public_llm_status
 
     space = active_space()
+    provider = embedding_status() if space else {"state": "not_configured", "reason": None, "at": None}
+    # Configured is not enough: while the provider's latest call in this instance failed,
+    # searches degrade to full text, so report that instead of advertising hybrid search.
+    semantic = space is not None and provider["state"] != "failing"
     return {
         "status": "healthy",
         "service": "gripper-backend",
         "capabilities": {
-            "semantic_search": space is not None,
-            "retrieval_mode": "hybrid" if space else "full_text_only",
+            "semantic_search": semantic,
+            "retrieval_mode": "hybrid" if semantic else "full_text_only",
             "embedding": space.public() if space else None,
+            "embedding_provider": provider,
             "ingestion_mode": ingestion_mode(),
             "email_delivery": email_delivery_available(),
             "llm": public_llm_status(),
