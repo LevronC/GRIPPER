@@ -122,14 +122,18 @@ Set production environment variables in Vercel:
 
 | Variable | Required | Notes |
 |----------|----------|-------|
-| `DATABASE_URL` | Yes | PostgreSQL with `pgvector`. On Vercel + Supabase, use the **Transaction pooler** (`aws-<region>.pooler.supabase.com`) on port **6543** with `sslmode=require`. URL-encode password specials (`@` → `%40`). |
-| `REDIS_URL` | Yes | Token blacklist + RQ (must start with `redis://` or `rediss://`) |
-| `SECRET_KEY` | Yes | JWT signing key |
-| `SUPERUSER_DATABASE_URL` | Recommended | Same encoded Supabase pooler URL as `DATABASE_URL` |
-| `SEED_DEMO_USER` | No | Set `false` in production to skip shared demo password seed |
+| `DATABASE_URL` | Yes | Runtime connection as the **restricted** `gripper_app` role (not `postgres`). On Supabase use the Transaction pooler (port 6543, `sslmode=require`). URL-encode password specials. |
+| `MIGRATION_DATABASE_URL` | For migrations | Owner connection used only by `alembic upgrade head` and `scripts/`. Do not reuse it as `DATABASE_URL`. |
+| `REDIS_URL` | Optional | Token blacklist + RQ (`redis://` or `rediss://`) |
+| `SECRET_KEY` | Yes | JWT signing key, at least 32 characters |
+| `SEED_DEMO_USER` | No | Leave `false` in production |
 | `VITE_API_BASE_URL` | No | Defaults to `/api` on Vercel |
 
-Migrations run automatically on API cold start. Check `/api/health/db` for `"schema_ready": true`.
+Run migrations and create the runtime role as a deploy step (see
+[docs/DATABASE_SECURITY.md](docs/DATABASE_SECURITY.md)). `GET /api/health/db` returns
+`"rls_enforced": true` only when the runtime role cannot bypass row-level security; the API
+refuses DB-backed requests otherwise.
+
 
 ## Contributing
 

@@ -24,10 +24,9 @@ _bootstrap_error: Optional[Exception] = None
 
 try:
     ensure_database_ready()
-    logger.info("Database bootstrap succeeded on cold start")
-except Exception as exc:
+except Exception as exc:  # only reachable when AUTO_MIGRATE=true
     _bootstrap_error = exc
-    logger.exception("Database bootstrap failed on cold start: %s", exc)
+    logger.exception("Database bootstrap failed on cold start")
 
 app = FastAPI(title="Gripper Vercel API Gateway")
 
@@ -47,15 +46,10 @@ async def retry_bootstrap(request: Request, call_next):
             logger.info("Database bootstrap succeeded on retry")
         except Exception as exc:
             _bootstrap_error = exc
-            logger.error("Database bootstrap retry failed: %s", exc)
+            logger.error("Database bootstrap retry failed: %s", type(exc).__name__)
             return JSONResponse(
                 status_code=503,
-                content={
-                    "detail": (
-                        "Database is not ready. Migrations may still be running. "
-                        f"Error: {exc}"
-                    )
-                },
+                content={"detail": "Database is not ready. Migrations may still be running."},
             )
     return await call_next(request)
 

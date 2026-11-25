@@ -47,13 +47,14 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/gripper_test
-      SUPERUSER_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/gripper_test
+      # Owner: migrations + fixture seeding only.
+      MIGRATION_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/gripper_test
+      # Runtime: restricted role (NOSUPERUSER, NOBYPASSRLS, not owner). Created below.
+      DATABASE_URL: postgresql://gripper_app:gripper_app_ci@localhost:5432/gripper_test
       REDIS_URL: redis://localhost:6379/0
       SECRET_KEY: ci-test-secret-key-0123456789abcdef
-      SKIP_DB_BOOTSTRAP: "1"
-      SEED_DEMO_USER: "false"
-      ALLOW_HEADER_AUTH: "true"
+      ENVIRONMENT: test
+      REQUIRE_INTEGRATION: "1"
       PYTHONPATH: .
     steps:
       - uses: actions/checkout@v4
@@ -80,7 +81,7 @@ jobs:
           python - <<'PY'
           import os
           from sqlalchemy import create_engine, text
-          url = os.environ["DATABASE_URL"]
+          url = os.environ["MIGRATION_DATABASE_URL"].replace("postgresql://", "postgresql+psycopg2://")
           engine = create_engine(url)
           with engine.begin() as conn:
               result = conn.execute(text("SELECT extversion FROM pg_extension WHERE extname='vector'"))
@@ -101,6 +102,12 @@ jobs:
             echo '```' >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
+      - name: Create restricted runtime role
+        working-directory: backend
+        run: APP_DB_USER=gripper_app APP_DB_PASSWORD=gripper_app_ci python scripts/create_app_role.py
+      - name: Verify runtime role cannot bypass RLS
+        working-directory: backend
+        run: python scripts/check_db_role.py > /dev/null
       - name: Ruff lint
         working-directory: backend
         run: ruff check tests app/core/rbac.py app/api/deps.py app/db/migrate.py
