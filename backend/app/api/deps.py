@@ -88,6 +88,9 @@ def get_current_user(
     user = db.execute(select(models.User).where(models.User.id == user_id)).scalar_one_or_none()
     if user is None or not user.is_verified:
         raise _UNAUTHORIZED
+    # Password reset increments token_version, invalidating every earlier token.
+    if payload.get("typ") != "access" or payload.get("ver") != user.token_version:
+        raise _UNAUTHORIZED
     return CurrentUser(
         id=user.id, institution_id=user.institution_id, email=user.email, role=user.role
     )

@@ -65,12 +65,8 @@ class Settings(BaseSettings):
     # Shared secret for the manual ingestion-retry endpoint (/cron/process-documents)
     CRON_SECRET: str = os.getenv("CRON_SECRET", "")
 
-    # Feature flags
-    SEED_DEMO_USER: bool = _bool_env("SEED_DEMO_USER", "true")
-
-    # Set to "true" only in local development to print OTP codes to the console.
-    # Never enable in production — codes will appear in log aggregators.
-    DEBUG_PRINT_CODES: bool = _bool_env("DEBUG_PRINT_CODES")
+    # Include exception text in 500 responses. Local debugging only; refused in production.
+    DEBUG_ERRORS: bool = _bool_env("DEBUG_ERRORS")
 
     # CORS — comma-separated list of allowed origins
     ALLOWED_ORIGINS: str = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173")
@@ -109,6 +105,8 @@ if settings.SECRET_KEY in _KNOWN_INSECURE_KEYS or len(settings.SECRET_KEY) < 32:
 
 if settings.DB_ROLE_SAFETY not in ("enforce", "warn"):
     raise RuntimeError("DB_ROLE_SAFETY must be 'enforce' or 'warn'.")
+if settings.is_production and settings.DEBUG_ERRORS:
+    raise RuntimeError("DEBUG_ERRORS must not be enabled when ENVIRONMENT=production.")
 if settings.is_production and settings.DB_ROLE_SAFETY != "enforce":
     raise RuntimeError("DB_ROLE_SAFETY=warn is not permitted when ENVIRONMENT=production.")
 

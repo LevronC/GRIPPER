@@ -2,7 +2,7 @@
 Centralized error helpers for FastAPI route handlers.
 
 Prevents raw exception messages from leaking implementation details to API
-consumers in production. In debug mode (DEBUG_PRINT_CODES), the original
+consumers in production. In debug mode (DEBUG_ERRORS), the original
 error is included in the detail for easier local troubleshooting.
 """
 
@@ -24,7 +24,7 @@ def internal_error(exc: Exception, operation: str = "operation") -> dict[str, An
 
     try:
         from app.core.config import settings
-        debug = settings.DEBUG_PRINT_CODES
+        debug = settings.DEBUG_ERRORS
     except Exception:
         debug = False
 

@@ -35,7 +35,8 @@ class User(Base):
     role: Mapped[str] = mapped_column(String(50), nullable=False) # analyst, sector_lead, pm, faculty, trustee, admin
     graduation_year: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
-    verification_code: Mapped[Optional[str]] = mapped_column(String(6), nullable=True)
+    # Incremented on password reset; JWTs carry it as `ver` and are rejected on mismatch.
+    token_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     permissions: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True) # JSON array of permissions
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=text("TIMEZONE('utc', NOW())"))
 
@@ -161,3 +162,32 @@ class GovernanceEvent(Base):
     # Relationships
     institution: Mapped["Institution"] = relationship()
 
+
+
+class Invitation(Base):
+    """Admin-issued invitation to join exactly one institution with one role."""
+    __tablename__ = "invitations"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    institution_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("institutions.id", ondelete="CASCADE"), nullable=False)
+    email: Mapped[str] = mapped_column(String(255), nullable=False)
+    role: Mapped[str] = mapped_column(String(50), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    created_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=text("TIMEZONE('utc', NOW())"))
+    accepted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    accepted_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
+class PasswordResetToken(Base):
+    __tablename__ = "password_reset_tokens"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    institution_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("institutions.id", ondelete="CASCADE"), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=text("TIMEZONE('utc', NOW())"))
+    used_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)

@@ -12,12 +12,13 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
+from app.api.admin import router as admin_router
 from app.api.auth import router as auth_router
 from app.api.deps import CurrentUser, RoleChecker
 from app.api.tenancy import require_portfolio
 from app.core.rbac import (
     ADMIN_ROLES,
-    ALL_ROLES as _ALL_ROLES,
+    INVITABLE_ROLES,
     HOLDINGS_WRITE_ROLES,
     PORTFOLIO_WRITE_ROLES,
     READ_ROLES,
@@ -95,6 +96,7 @@ app.add_middleware(
 )
 
 app.include_router(auth_router)
+app.include_router(admin_router)
 app.include_router(api_router)
 
 
@@ -155,26 +157,18 @@ def _institution_json(i: models.Institution) -> dict:
     }
 
 
-@app.post("/institutions")
-def create_institution(
-    name: str,
-    slug: str,
-    db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(RoleChecker(ADMIN_ROLES)),
-):
-    inst = models.Institution(name=name, slug=slug)
-    db.add(inst)
-    db.flush()
-    return _institution_json(inst)
-
-
 @app.get("/institutions")
-def list_institutions(db: Session = Depends(get_db)):
-    """Public list used by the sign-in form (institution names only)."""
-    institutions = db.execute(
-        select(models.Institution).order_by(models.Institution.name)
-    ).scalars().all()
-    return [_institution_json(i) for i in institutions]
+def list_institutions(
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(RoleChecker(READ_ROLES)),
+):
+    """
+    The authenticated user's institution. Tenants are not publicly enumerable, and
+    there is no API to create one: provisioning uses scripts/provision_institution.py
+    with the owner connection.
+    """
+    inst = db.get(models.Institution, current_user.institution_id)
+    return [_institution_json(inst)] if inst else []
 
 
 # ── Portfolios ────────────────────────────────────────────────────────────────
@@ -309,10 +303,10 @@ def update_user_role(
     Assigns a new role to a user within the admin's own institution. Runs under the
     admin's RLS context, so users of other institutions are invisible (404).
     """
-    if payload.role not in _ALL_ROLES:
+    if payload.role not in INVITABLE_ROLES:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid role. Must be one of: {', '.join(_ALL_ROLES)}",
+            detail=f"Invalid role. Must be one of: {', '.join(INVITABLE_ROLES)}",
         )
     target = db.execute(
         select(models.User).where(

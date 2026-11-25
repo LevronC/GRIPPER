@@ -43,6 +43,8 @@ PROTECTED_TABLES = (
     "meetings",
     "ips_rules",
     "governance_events",
+    "invitations",
+    "password_reset_tokens",
 )
 
 TENANT_SETTING = "app.current_institution_id"

@@ -9,6 +9,8 @@ from .models import (
     Meeting,
     IPSRule,
     GovernanceEvent,
+    Invitation,
+    PasswordResetToken,
 )
 
 __all__ = [
@@ -22,4 +24,6 @@ __all__ = [
     "Meeting",
     "IPSRule",
     "GovernanceEvent",
+    "Invitation",
+    "PasswordResetToken",
 ]
