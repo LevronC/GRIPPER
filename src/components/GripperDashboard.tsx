@@ -665,7 +665,9 @@ export default function GripperDashboard() {
                           doc.status === 'processed' ? 'bg-cyan-500/5 text-cyan-400 border-cyan-500/20'
                             : doc.status === 'failed' ? 'bg-red-500/5 text-red-400 border-red-500/20'
                               : 'bg-amber-500/5 text-amber-400 border-amber-500/20'}`}>
-                          {({ processed: 'Indexed', pending: 'Pending', processing: 'Processing', failed: 'Failed', duplicate: 'Duplicate' } as Record<string, string>)[doc.status] ?? doc.status}
+                          {doc.status === 'processed' && doc.index_mode === 'keyword_only'
+                            ? 'Indexed (keyword only)'
+                            : ({ processed: 'Indexed', pending: 'Pending', processing: 'Processing', failed: 'Failed', duplicate: 'Duplicate' } as Record<string, string>)[doc.status] ?? doc.status}
                         </div>
                         {doc.status === 'failed' && (
                           <button type="button" onClick={() => handleRetryDocument(doc.id)}

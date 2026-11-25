@@ -49,6 +49,9 @@ export interface ResearchReport {
   status: string;
   error_message?: string | null;
   attempts?: number;
+  chunks?: number;
+  /** hybrid: vectors in the active embedding space; keyword_only: full-text search only */
+  index_mode?: 'hybrid' | 'keyword_only' | null;
   created_at: string;
 }
 

@@ -306,3 +306,116 @@ def test_queue_mode_with_real_rq_worker(api, owner_engine, two_tenants, tmp_path
     with owner_engine.connect() as conn:
         tenants = set(conn.execute(text("SELECT institution_id FROM document_chunks WHERE report_id = :r"), {"r": rid}).scalars())
     assert tenants == {a.institution_id}
+
+
+# ── Phase 2: source integrity, stable ids, partial failures ─────────────────
+
+def _pages_pdf(path, texts):
+    doc = fitz.open()
+    for body in texts:
+        page = doc.new_page()
+        if body:
+            page.insert_textbox(fitz.Rect(36, 36, 560, 800), body, fontsize=8)
+    doc.save(str(path))
+    doc.close()
+    return str(path)
+
+
+def _chunks(owner_engine, rid):
+    with owner_engine.connect() as conn:
+        return conn.execute(text(
+            "SELECT id, content, metadata_json FROM document_chunks WHERE report_id = :r "
+            "ORDER BY (metadata_json->>'chunk_index')::int"), {"r": rid}).all()
+
+
+def test_chunk_ids_stable_and_metadata_locates_passage(owner_engine, two_tenants, tmp_path):
+    from app.services.parsing.parser import parse_pdf
+
+    a = two_tenants.a
+    # Must fit the PDF text box (insert_textbox silently drops overflowing text) yet
+    # exceed one chunk's token budget (~35 estimated tokens per item x 30 items).
+    long_body = " ".join(f"Société Générale word{i} — naïve résumé €1.2bn;" for i in range(30))
+    path = _pages_pdf(tmp_path / "multi.pdf", ["Page one intro.  Multiple   spaces\tand\ttabs.", "", long_body])
+    copy = tmp_path / "multi-copy.pdf"
+    copy.write_bytes(open(path, "rb").read())
+    pages = {p["page_num"]: p["text"].split() for p in parse_pdf(str(copy))}
+    assert pages[2] == [] and len(pages[3]) > 200  # fixture sanity
+
+    rid = _report(owner_engine, a.institution_id, path)
+    _ingest(rid, path, a.institution_id)
+    first = _chunks(owner_engine, rid)
+    assert {m["page"] for _, _, m in first} == {1, 3}           # blank page 2 yields no chunks, numbering kept
+    assert len([m for _, _, m in first if m["page"] == 3]) > 1   # long page split with overlap
+    for _, content, m in first:
+        assert content == " ".join(pages[m["page"]][m["word_start"]:m["word_end"]])  # exact source location
+    assert "Société Générale" in first[-1][1] and "\t" not in first[0][1]          # unicode kept, whitespace normalised
+
+    with owner_engine.begin() as conn:                           # force a reprocess of the same content
+        conn.execute(text("UPDATE research_reports SET status = 'failed', file_path = :f WHERE id = :r"),
+                     {"f": str(copy), "r": rid})
+    _ingest(rid, str(copy), a.institution_id)
+    second = _chunks(owner_engine, rid)
+    assert [c[0] for c in second] == [c[0] for c in first]      # same chunk ids => citations stay valid
+
+
+def test_partial_database_write_failure_leaves_nothing_indexed(owner_engine, two_tenants, tmp_path, monkeypatch):
+    """A chunk Postgres refuses (NUL byte) fails the whole transaction: no partial index."""
+    a = two_tenants.a
+    path = _pdf(tmp_path / "nul.pdf")
+    monkeypatch.setattr("app.services.ingestion.pipeline.parse_pdf",
+                        lambda _p: [{"page_num": 1, "text": "good text " * 50}, {"page_num": 2, "text": "bad \x00 byte"}])
+    rid = _report(owner_engine, a.institution_id, path)
+    with pytest.raises(Exception):
+        _ingest(rid, path, a.institution_id)
+    state, chunks, _ = _state(owner_engine, rid)
+    assert state["status"] == "failed" and chunks == 0 and os.path.exists(path)
+    assert "Traceback" not in (state["error_message"] or "") and "\x00" not in (state["error_message"] or "")
+
+
+def test_worker_interruption_then_recovery(owner_engine, runtime_engine, two_tenants, tmp_path, monkeypatch):
+    """A process killed mid-job leaves 'processing'; the stale sweep re-queues it and a rerun completes once."""
+    a = two_tenants.a
+    path = _pdf(tmp_path / "crash.pdf")
+    rid = _report(owner_engine, a.institution_id, path)
+
+    def killed(*_a, **_k):
+        raise KeyboardInterrupt  # BaseException: not handled like an ordinary failure
+
+    monkeypatch.setattr("app.services.ingestion.pipeline.generate_embeddings", killed)
+    with pytest.raises(KeyboardInterrupt):
+        _ingest(rid, path, a.institution_id)
+    state, chunks, _ = _state(owner_engine, rid)
+    assert state["status"] == "processing" and chunks == 0 and os.path.exists(path)
+
+    with owner_engine.begin() as conn:
+        conn.execute(text("UPDATE research_reports SET processing_started_at = TIMEZONE('utc', NOW()) - INTERVAL '20 minutes' WHERE id = :r"), {"r": rid})
+    with runtime_engine.connect() as conn:
+        assert rid in set(conn.execute(text("SELECT report_id FROM app_pending_ingestion_jobs(50)")).scalars())
+
+    monkeypatch.undo()
+    n = _ingest(rid, path, a.institution_id)
+    state, chunks, _ = _state(owner_engine, rid)
+    assert state["status"] == "processed" and chunks == n and state["attempts"] == 2
+
+
+def test_documents_list_reports_index_mode(api, owner_engine, two_tenants, tmp_path, monkeypatch):
+    a = two_tenants.a
+    hybrid = _pdf(tmp_path / "h.pdf")
+    rh = _report(owner_engine, a.institution_id, hybrid)
+    _ingest(rh, hybrid, a.institution_id)
+
+    def down(*_a, **_k):
+        raise EmbeddingUnavailable("down")
+
+    monkeypatch.setattr(gen, "_embed", down)
+    kw = _pdf(tmp_path / "k.pdf", body=BODY + " different content")
+    rk = _report(owner_engine, a.institution_id, kw)
+    _ingest(rk, kw, a.institution_id)
+    monkeypatch.undo()
+
+    docs = {d["id"]: d for d in api.get("/documents", headers=a.auth()).json()["results"]}
+    assert docs[str(rh)]["index_mode"] == "hybrid" and docs[str(rh)]["chunks"] >= 1
+    assert docs[str(rk)]["index_mode"] == "keyword_only"
+    pending = _report(owner_engine, a.institution_id, str(tmp_path / "p.pdf"))
+    docs = {d["id"]: d for d in api.get("/documents", headers=a.auth()).json()["results"]}
+    assert docs[str(pending)]["index_mode"] is None

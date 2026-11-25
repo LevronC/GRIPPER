@@ -41,6 +41,7 @@ def _row_to_doc(chunk: DocumentChunk, company: str, sector: str, score: float) -
         "chunk_id": str(chunk.id),
         "content": chunk.content,
         "page": chunk.metadata_json.get("page") if chunk.metadata_json else None,
+        "chunk_index": chunk.metadata_json.get("chunk_index") if chunk.metadata_json else None,
         "company": company,
         "sector": sector,
         "similarity": score,

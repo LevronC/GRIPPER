@@ -58,7 +58,8 @@ def chunk_document_pages(
     most `token_budget`. Pages are chunked independently so every chunk carries an exact
     page number. Empty pages produce no chunks. Consecutive windows share the last
     `overlap` words of the previous window (fewer if that window is shorter).
-    Returns dicts with page_num, content, word_count, est_tokens.
+    Returns dicts with page_num, content, word_start, word_end, word_count, est_tokens;
+    (page_num, word_start, word_end) locate the passage in the page's extracted text.
     """
     if token_budget <= 0:
         raise ValueError("token_budget must be positive")
@@ -80,6 +81,8 @@ def chunk_document_pages(
             chunks.append({
                 "page_num": page["page_num"],
                 "content": " ".join(words[start:end]),
+                "word_start": start,          # index of first word within the page
+                "word_end": end,              # exclusive
                 "word_count": end - start,
                 "est_tokens": used,
             })

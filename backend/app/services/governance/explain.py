@@ -141,6 +141,7 @@ def generate_violation_explanation(
                 "company": chunk["company"],
                 "sector": chunk["sector"],
                 "page": chunk["page"],
+                "chunk_index": chunk.get("chunk_index"),
                 "content": chunk["content"],
                 "retrieval_score": chunk.get("rrf_score"),
             })

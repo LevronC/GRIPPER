@@ -76,6 +76,14 @@ def _delete_source(file_ref: str) -> None:
         logger.warning("Could not delete source after ingestion (%s)", type(exc).__name__)
 
 
+_CHUNK_NAMESPACE = uuid.UUID("6f1d3c52-8a0e-4b8e-9d0e-2b6f3a4c5d7e")
+
+
+def chunk_id(report_id: uuid.UUID, chunk_index: int) -> uuid.UUID:
+    """Stable chunk identifier: uuid5 of (report id, position in the document)."""
+    return uuid.uuid5(_CHUNK_NAMESPACE, f"{report_id}:{chunk_index}")
+
+
 def calculate_sha256(file_path: str) -> str:
     sha256_hash = hashlib.sha256()
     with open(file_path, "rb") as f:
@@ -145,14 +153,22 @@ def ingest_document(db: Session, report_id: uuid.UUID, file_ref: str, institutio
             db.execute(delete(DocumentChunk).where(DocumentChunk.report_id == report_id))  # idempotent retries
             db.add_all([
                 DocumentChunk(
-                    id=uuid.uuid4(),
+                    # Deterministic id: re-processing the same document yields the same chunk
+                    # ids, so stored citations stay valid across retries.
+                    id=chunk_id(report_id, i),
                     institution_id=institution_id,
                     report_id=report_id,
                     content=chunk["content"],
                     embedding=vector,
                     embedding_model=space.space_id if space else None,
                     embedding_provider=space.provider if space else None,
-                    metadata_json={"page": chunk["page_num"], "chunk_index": i, "word_count": chunk["word_count"]},
+                    metadata_json={
+                        "page": chunk["page_num"],
+                        "chunk_index": i,
+                        "word_start": chunk["word_start"],
+                        "word_end": chunk["word_end"],
+                        "word_count": chunk["word_count"],
+                    },
                 )
                 for i, (chunk, vector) in enumerate(zip(chunks, vectors))
             ])

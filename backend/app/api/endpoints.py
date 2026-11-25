@@ -222,11 +222,28 @@ def list_documents(
         models.ResearchReport.attempts,
         models.ResearchReport.created_at,
     ]
+    from app.services.embeddings.generator import active_space
+
+    space = active_space()
+    chunk_count = (
+        select(func.count(models.DocumentChunk.id))
+        .where(models.DocumentChunk.report_id == models.ResearchReport.id)
+        .scalar_subquery()
+    )
+    vector_count = (
+        select(func.count(models.DocumentChunk.id))
+        .where(
+            models.DocumentChunk.report_id == models.ResearchReport.id,
+            models.DocumentChunk.embedding.isnot(None),
+            models.DocumentChunk.embedding_model == (space.space_id if space else None),
+        )
+        .scalar_subquery()
+    )
     try:
         own = models.ResearchReport.institution_id == current_user.institution_id
         total = db.query(func.count(models.ResearchReport.id)).filter(own).scalar()
         rows = (
-            db.query(*_cols)
+            db.query(*_cols, chunk_count.label("chunks"), vector_count.label("vector_chunks"))
             .filter(own)
             .order_by(models.ResearchReport.created_at.desc())
             .offset(offset)
@@ -235,6 +252,12 @@ def list_documents(
         )
     except Exception as e:
         raise HTTPException(status_code=500, **internal_error(e, "list_documents"))
+
+    def index_mode(r) -> Optional[str]:
+        """How the document is searchable now: hybrid, keyword_only, or None (not indexed)."""
+        if r.status != "processed" or not r.chunks:
+            return None
+        return "hybrid" if r.vector_chunks == r.chunks else "keyword_only"
 
     return {
         "total": total,
@@ -249,6 +272,8 @@ def list_documents(
                 "status": r.status,
                 "error_message": r.error_message,
                 "attempts": r.attempts,
+                "chunks": r.chunks,
+                "index_mode": index_mode(r),
                 "created_at": r.created_at.isoformat(),
             }
             for r in rows
