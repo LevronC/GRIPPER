@@ -16,6 +16,11 @@ from app.services.retrieval.searcher import full_text_leg
 pytestmark = pytest.mark.integration
 
 
+def test_full_text_leg_returns_nothing_when_the_session_has_no_tenant(two_tenants):
+    with SessionLocal() as db:
+        assert full_text_leg(db, "Semiconductor liquidity risk", two_tenants.a.institution_id, limit=5) == []
+
+
 def test_full_text_leg_hits_the_tenant_chunk_only(two_tenants):
     alpha, bravo = two_tenants.a, two_tenants.b
     with SessionLocal() as db:

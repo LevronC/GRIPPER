@@ -89,7 +89,7 @@ def _search(a, limit=5, query=QUERY):
 
 def test_vector_leg_orders_by_cosine_similarity(corpus, monkeypatch):
     a, ids, names = corpus
-    monkeypatch.setattr("app.services.retrieval.searcher.func.plainto_tsquery", lambda *_: text("to_tsquery('english', 'zzznomatch')"))
+    monkeypatch.setattr("app.services.retrieval.searcher.full_text_leg", lambda *_args, **_kwargs: [])
     out = _search(a, limit=5)
     assert [names[r["chunk_id"]] for r in out.results] == ["c1", "c2", "c3", "c4", "c5"]
     for r in out.results:

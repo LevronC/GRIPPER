@@ -19,7 +19,7 @@ interface ExplanationResult {
   message: string;
   /** From the deterministic evaluator only. Research never changes it. */
   violation_status: 'open' | 'resolved';
-  research_status: 'found' | 'none' | 'unavailable';
+  research_status: 'found' | 'none' | 'insufficient' | 'unavailable';
   explanation: string;
   explanation_source: 'template' | 'llm';
   fallback_reason: string | null;
@@ -199,7 +199,9 @@ export default function ExplainabilityDrawer({ violation, institutionId, onClose
                             ? 'Related research was found for context. It does not approve or exempt this violation.'
                             : result.research_status === 'none'
                               ? 'No research in your institution matched this violation.'
-                              : 'Research search was unavailable.'}
+                              : result.research_status === 'insufficient'
+                                ? 'Research was retrieved, but none of it cleared the evidence bar. It is not used as support.'
+                                : 'Research search was unavailable.'}
                         </p>
                       </div>
                     </div>

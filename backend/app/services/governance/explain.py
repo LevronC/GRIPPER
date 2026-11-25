@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 
 from app.models import GovernanceEvent, IPSRule, Institution
 from app.services.llm.grounding import maybe_explain
+from app.services.retrieval.gating import split_explanation_evidence
 from app.services.retrieval.searcher import hybrid_search
 
 logger = logging.getLogger(__name__)
@@ -114,6 +115,11 @@ def render_template_explanation(f: ExplanationFacts) -> str:
         )
     elif f.research_status == "none":
         research = "No research documents in your institution matched this violation."
+    elif f.research_status == "insufficient":
+        research = (
+            "Retrieved research was below the evidence bar, so it is not used to explain this "
+            "violation. The policy result is unchanged."
+        )
     else:
         research = "Research search was unavailable, so no supporting documents were retrieved."
     return f"{render_policy_explanation(f)} {research}"
@@ -142,21 +148,28 @@ def generate_violation_explanation(
     try:
         outcome = hybrid_search(db, query, institution_id, limit=EVIDENCE_LIMIT)
         retrieval_mode = outcome.retrieval_mode
-        for chunk in outcome.results:
-            evidence.append({
-                "chunk_id": chunk["chunk_id"],
-                "report_id": chunk["report_id"],
-                "company": chunk["company"],
-                "sector": chunk["sector"],
-                "page": chunk["page"],
-                "chunk_index": chunk.get("chunk_index"),
-                "content": chunk["content"],
-                "retrieval_score": chunk.get("rrf_score"),
-            })
-        research_status = "found" if evidence else "none"
+        provider = (outcome.embedding or {}).get("provider")
+        accepted, _rejected = split_explanation_evidence(outcome.results, provider=provider)
+        if outcome.results and not accepted:
+            research_status = "insufficient"
+        else:
+            for chunk in accepted:
+                evidence.append({
+                    "chunk_id": chunk["chunk_id"],
+                    "report_id": chunk["report_id"],
+                    "company": chunk["company"],
+                    "sector": chunk["sector"],
+                    "page": chunk["page"],
+                    "chunk_index": chunk.get("chunk_index"),
+                    "content": chunk["content"],
+                    "retrieval_score": chunk.get("rrf_score"),
+                    "cosine_similarity": chunk.get("cosine_similarity"),
+                })
+            research_status = "found" if evidence else "none"
     except Exception as exc:
         logger.warning("Research retrieval failed for event %s (%s)", event_id, type(exc).__name__)
         research_status = "unavailable"
+        db.rollback()
 
     rule = db.get(IPSRule, event.rule_id) if event.rule_id else None
     facts = ExplanationFacts(
@@ -172,15 +185,21 @@ def generate_violation_explanation(
     # and a model failure cannot replace the policy sentences.
     template = render_template_explanation(facts)
     institution = db.get(Institution, institution_id)
-    llm = maybe_explain(
-        institution_authorized=bool(institution and institution.external_processing_authorized),
-        violation_status=violation_status,
-        policy_text=render_policy_explanation(facts),
-        details=details,
-        retrieval_mode=retrieval_mode,
-        evidence=evidence,
-        institution_id=str(institution_id),
-    )
+    # No excerpts means no provider call. Insufficient evidence is not sent to a model.
+    if not evidence:
+        from app.services.llm.grounding import LlmOutcome
+
+        llm = LlmOutcome()
+    else:
+        llm = maybe_explain(
+            institution_authorized=bool(institution and institution.external_processing_authorized),
+            violation_status=violation_status,
+            policy_text=render_policy_explanation(facts),
+            details=details,
+            retrieval_mode=retrieval_mode,
+            evidence=evidence,
+            institution_id=str(institution_id),
+        )
     return {
         "event_id": str(event.id),
         "event_type": event.event_type,

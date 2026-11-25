@@ -37,21 +37,36 @@ class SearchOutcome:
     legs: Dict[str, int] = field(default_factory=dict)
 
 
-def _row_to_doc(chunk: DocumentChunk, company: str, sector: str, score: float) -> Dict[str, Any]:
+def _metadata(raw: Any) -> dict:
+    if isinstance(raw, dict):
+        return raw
+    return {}
+
+
+def _row_from_function(row: Any, *, cosine: Optional[float] = None, text_score: Optional[float] = None) -> Dict[str, Any]:
+    meta = _metadata(row.metadata_json)
+    score = cosine if cosine is not None else (text_score or 0.0)
     return {
-        "chunk_id": str(chunk.id),
-        "content": chunk.content,
-        "page": chunk.metadata_json.get("page") if chunk.metadata_json else None,
-        "chunk_index": chunk.metadata_json.get("chunk_index") if chunk.metadata_json else None,
-        "company": company,
-        "sector": sector,
+        "chunk_id": str(row.chunk_id),
+        "content": row.content,
+        "page": meta.get("page"),
+        "chunk_index": meta.get("chunk_index"),
+        "company": row.company,
+        "sector": row.sector,
         "similarity": score,
-        "report_id": str(chunk.report_id),
+        "cosine_similarity": cosine,
+        "text_score": text_score,
+        "report_id": str(row.report_id),
     }
 
 
+def _session_tenant_matches(db: Session, institution_id: uuid.UUID) -> bool:
+    """The SQL functions read the session institution, not this argument. Refuse a mismatch."""
+    return str(db.info.get("tenant_id") or "") == str(institution_id)
+
+
 def vector_statement(institution_id: uuid.UUID, query_embedding: List[float], space_id: str, limit: int):
-    """The vector-leg query. Evaluation and EXPLAIN use this same statement."""
+    """Reference ORM query; the runtime vector leg uses app_search_vector."""
     distance = DocumentChunk.embedding.cosine_distance(query_embedding)
     return (
         select(DocumentChunk, ResearchReport.company, ResearchReport.sector, distance.label("distance"))
@@ -65,7 +80,7 @@ def vector_statement(institution_id: uuid.UUID, query_embedding: List[float], sp
 
 
 def full_text_statement(institution_id: uuid.UUID, query: str, limit: int):
-    """The full-text leg. Evaluation and EXPLAIN use this same statement."""
+    """Historical expression query; runtime uses app_search_full_text."""
     ts_query = func.plainto_tsquery("english", query)
     ts_vector = func.to_tsvector("english", DocumentChunk.content)
     return (
@@ -84,11 +99,11 @@ def vector_leg(
     institution_id: uuid.UUID,
     limit: int,
     query_embedding: Optional[List[float]] = None,
-) -> tuple[List[Dict[str, Any]], Optional[str], Optional[dict]]:
+) -> tuple[List[Dict[str, Any]], Optional[str], Optional[dict], Optional[List[float]]]:
     """
     Top `limit` chunks by cosine distance inside the active embedding space.
 
-    Returns (rows, degraded_reason, embedding_info). `degraded_reason` is set when
+    Returns (rows, degraded_reason, embedding_info, query_embedding). `degraded_reason` is set when
     no embedding can be produced; the row list is then empty.
     """
     try:
@@ -101,24 +116,64 @@ def vector_leg(
         embedding_info = space.public()
     except EmbeddingUnavailable as exc:
         logger.warning("Search degraded to full-text only (%s)", exc)
-        return [], f"semantic search unavailable: {exc}", None
+        return [], f"semantic search unavailable: {exc}", None, None
+    if not _session_tenant_matches(db, institution_id):
+        return [], None, embedding_info, query_embedding
+    literal = "[" + ",".join(f"{value:.8f}" for value in query_embedding) + "]"
     rows = [
-        _row_to_doc(chunk, company, sector, 1.0 - float(dist) if dist is not None else 0.0)
-        for chunk, company, sector, dist in db.execute(
-            vector_statement(institution_id, query_embedding, space.space_id, limit)
+        _row_from_function(row, cosine=1.0 - float(row.score) if row.score is not None else 0.0)
+        for row in db.execute(
+            text(
+                "SELECT * FROM app_search_vector(CAST(:embedding AS vector), :space, :lim)"
+            ),
+            {"embedding": literal, "space": space.space_id, "lim": limit},
         ).all()
     ]
-    return rows, None, embedding_info
+    return rows, None, embedding_info, query_embedding
 
 
 def full_text_leg(db: Session, query: str, institution_id: uuid.UUID, limit: int) -> List[Dict[str, Any]]:
     """Top `limit` chunks by ts_rank. An empty query or no matches yields an empty list."""
-    if not query.strip():
+    if not query.strip() or not _session_tenant_matches(db, institution_id):
         return []
     return [
-        _row_to_doc(chunk, company, sector, float(rank))
-        for chunk, company, sector, rank in db.execute(full_text_statement(institution_id, query, limit)).all()
+        _row_from_function(row, text_score=float(row.score) if row.score is not None else 0.0)
+        for row in db.execute(
+            text("SELECT * FROM app_search_full_text(:query, :lim)"),
+            {"query": query, "lim": limit},
+        ).all()
     ]
+
+
+def _fill_missing_cosine(
+    db: Session,
+    institution_id: uuid.UUID,
+    results: List[Dict[str, Any]],
+    query_embedding: Optional[List[float]],
+    space_id: Optional[str],
+) -> None:
+    """Full-text-only hits do not carry a cosine. Score the few fused rows so the gate can judge them."""
+    if not query_embedding or not space_id or not _session_tenant_matches(db, institution_id):
+        return
+    missing = [row["chunk_id"] for row in results if row.get("cosine_similarity") is None]
+    if not missing:
+        return
+    literal = "[" + ",".join(f"{value:.8f}" for value in query_embedding) + "]"
+    found: Dict[str, float] = {}
+    for chunk_id in missing:
+        distance = db.execute(
+            text(
+                "SELECT (embedding <=> CAST(:embedding AS vector))::float8 FROM document_chunks "
+                "WHERE id = :chunk_id AND institution_id = :institution AND embedding IS NOT NULL "
+                "AND embedding_model = :space"
+            ),
+            {"embedding": literal, "chunk_id": chunk_id, "institution": institution_id, "space": space_id},
+        ).scalar()
+        if distance is not None:
+            found[chunk_id] = 1.0 - float(distance)
+    for row in results:
+        if row.get("cosine_similarity") is None and row["chunk_id"] in found:
+            row["cosine_similarity"] = found[row["chunk_id"]]
 
 
 @observe_time("search_documents")
@@ -128,9 +183,15 @@ def hybrid_search(db: Session, query: str, institution_id: uuid.UUID, limit: int
 
     # Each leg sees a wider window than the fused result. 3x is the production window.
     candidates = limit * 3
-    vector_docs, degraded_reason, embedding_info = vector_leg(db, query, institution_id, candidates)
+    vector_docs, degraded_reason, embedding_info, query_embedding = vector_leg(
+        db, query, institution_id, candidates
+    )
     text_docs = full_text_leg(db, query, institution_id, candidates)
     results = reciprocal_rank_fusion(vector_docs, text_docs, k=RRF_K, limit=limit)
+    space_id = (
+        f"{embedding_info['model']}@{embedding_info['dimension']}" if embedding_info else None
+    )
+    _fill_missing_cosine(db, institution_id, results, query_embedding, space_id)
 
     return SearchOutcome(
         results=results,

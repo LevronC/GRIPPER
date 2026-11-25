@@ -109,26 +109,48 @@ def _load(owner_url: str, runtime_url: str, documents: list[dict], vectors: list
 
 
 def _retrieve(runtime_url: str, queries: list[dict]) -> dict[str, list[dict]]:
-    from app.db.session import make_session_factory, set_tenant
-    from app.services.retrieval.searcher import full_text_leg, hybrid_search, vector_leg
+    from app.db.session import database_role_report, make_session_factory, set_tenant
+    from app.services.retrieval.gating import split_explanation_evidence
+    from app.services.retrieval.searcher import full_text_leg, full_text_statement, hybrid_search, vector_leg
 
     factory = make_session_factory(runtime_url)
-    modes: dict[str, list[dict]] = {"full_text": [], "vector": [], "hybrid": []}
+    modes: dict[str, list[dict]] = {name: [] for name in (
+        "original_full_text", "full_text", "exact_vector", "vector", "hybrid", "gated_hybrid"
+    )}
     with factory() as db:
+        if database_role_report(db.connection())["problems"]:
+            raise SystemExit("Evaluation requires a restricted runtime role")
         set_tenant(db, INSTITUTION)
         for query in queries:
             text_rows = full_text_leg(db, query["text"], INSTITUTION, LIMIT)
-            vector_rows, degraded, _info = vector_leg(db, query["text"], INSTITUTION, LIMIT)
+            vector_rows, degraded, _info, _embedding = vector_leg(db, query["text"], INSTITUTION, LIMIT)
             if degraded:
                 raise SystemExit(f"Vector leg degraded: {degraded}")
             hybrid = hybrid_search(db, query["text"], INSTITUTION, limit=LIMIT)
-            packed = {"full_text": text_rows, "vector": vector_rows, "hybrid": hybrid.results}
+            original = [{"chunk_id": str(row[0].id)} for row in db.execute(
+                full_text_statement(INSTITUTION, query["text"], LIMIT)
+            )]
+            exact = [{"chunk_id": str(row[0])} for row in db.execute(text("""
+                WITH eligible AS MATERIALIZED (
+                    SELECT c.id,c.embedding FROM document_chunks c
+                    JOIN research_reports r ON r.id=c.report_id AND r.institution_id=c.institution_id
+                    WHERE c.institution_id=:tenant AND c.embedding_model=:space
+                      AND c.embedding IS NOT NULL AND r.status='processed'
+                ) SELECT id FROM eligible
+                ORDER BY embedding <=> CAST(:v AS vector), id LIMIT :lim
+            """), {"tenant": INSTITUTION, "space": f"{_info['model']}@{_info['dimension']}",
+                   "v": "[" + ",".join(map(str, _embedding)) + "]", "lim": LIMIT})]
+            accepted, rejected = split_explanation_evidence(hybrid.results, provider=_info["provider"])
+            packed = {"original_full_text": original, "full_text": text_rows,
+                      "exact_vector": exact, "vector": vector_rows,
+                      "hybrid": hybrid.results, "gated_hybrid": accepted}
             for mode, rows in packed.items():
                 modes[mode].append({
                     "query_id": query["id"],
                     "category": query["category"],
                     "relevant": list(query["relevant"]),
                     "retrieved_chunks": [row["chunk_id"] for row in rows],
+                    "rejected_chunks": [row["chunk_id"] for row in rejected] if mode == "gated_hybrid" else [],
                 })
     return modes
 
@@ -179,14 +201,14 @@ def _markdown(payload: dict) -> str:
         "",
         "## By category (Hit@5)",
         "",
-        "| Category | Full text | Vector | Hybrid | Queries |",
-        "|---|---:|---:|---:|---:|",
+        "| Category | " + " | ".join(payload["summary"]) + " | Queries |",
+        "|---|" + "---:|" * (len(payload["summary"]) + 1),
     ]
     for category, counts in payload["by_category"].items():
         if not counts["n"]:
             continue
         lines.append(
-            f"| {category} | {counts['full_text']:.3f} | {counts['vector']:.3f} | {counts['hybrid']:.3f} | {counts['n']} |"
+            f"| {category} | " + " | ".join(f"{counts[mode]:.3f}" for mode in payload["summary"]) + f" | {counts['n']} |"
         )
     lines.append("")
     return "\n".join(lines)
@@ -194,6 +216,9 @@ def _markdown(payload: dict) -> str:
 
 def main() -> int:
     args = _parse()
+    out = Path(BACKEND) / args.out
+    if out.with_suffix(".json").exists() or out.with_suffix(".md").exists():
+        raise SystemExit("Output exists; choose a new --out to preserve previous results.")
     _prepare_env(args.hash_embeddings)
     # Settings read the environment at import.
     from app.services.embeddings.generator import generate_embeddings
@@ -240,7 +265,8 @@ def main() -> int:
         "rrf_k": 60,
         "git_revision": git_revision(),
         "platform": platform.platform(),
-        "summary": {mode: summarize_queries(rows, LIMIT) for mode, rows in modes.items()},
+        "summary": {mode: {**summarize_queries(rows, LIMIT),
+                           "hit_at_1": summarize_queries(rows, 1)["hit"]} for mode, rows in modes.items()},
         "by_category": by_category,
         "queries": modes,
     }

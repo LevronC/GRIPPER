@@ -1,7 +1,8 @@
 import uuid
 from datetime import datetime
 from typing import Optional, List
-from sqlalchemy import String, ForeignKey, DateTime, Float, Integer, Boolean, JSON, text
+from sqlalchemy import Computed, String, ForeignKey, DateTime, Float, Integer, Boolean, JSON, text
+from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from pgvector.sqlalchemy import Vector
@@ -122,6 +123,11 @@ class DocumentChunk(Base):
     # vectors from the active space. "legacy-unknown" marks pre-provenance rows.
     embedding_model: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     embedding_provider: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    # Stored so full-text search can use a GIN index without reparsing the text.
+    search_vector: Mapped[Optional[str]] = mapped_column(
+        TSVECTOR,
+        Computed("to_tsvector('english', content)", persisted=True),
+    )
     metadata_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=text("TIMEZONE('utc', NOW())"))
 
