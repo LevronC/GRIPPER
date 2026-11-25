@@ -1,6 +1,8 @@
 import os
 from pydantic_settings import BaseSettings
 
+from app.services.llm.config import validate_provider_settings
+
 
 def normalize_redis_url(url: str) -> str:
     normalized = (url or "").strip()
@@ -71,6 +73,18 @@ class Settings(BaseSettings):
     # CORS — comma-separated list of allowed origins
     ALLOWED_ORIGINS: str = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173")
 
+    # Explanations. "none" is deterministic and makes no external call.
+    # "subq" calls SubQ Savant only when external processing is also enabled
+    # and the institution has been authorized. See docs/LLM.md.
+    LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "none").strip().lower()
+    LLM_EXTERNAL_PROCESSING_ENABLED: bool = _bool_env("LLM_EXTERNAL_PROCESSING_ENABLED")
+    SUBQ_API_KEY: str = os.getenv("SUBQ_API_KEY", "")
+    SUBQ_BASE_URL: str = os.getenv("SUBQ_BASE_URL", "https://api.subq.ai/v1").strip()
+    SUBQ_MODEL: str = os.getenv("SUBQ_MODEL", "subq-savant-1.4").strip()
+    LLM_TIMEOUT_SECONDS: float = float(os.getenv("LLM_TIMEOUT_SECONDS", "15"))
+    LLM_MAX_OUTPUT_TOKENS: int = int(os.getenv("LLM_MAX_OUTPUT_TOKENS", "500"))
+    LLM_MAX_RETRIES: int = int(os.getenv("LLM_MAX_RETRIES", "1"))
+
     class Config:
         env_file = ".env"
         extra = "ignore"
@@ -121,3 +135,5 @@ if not settings.UPLOAD_DIR:
         settings.UPLOAD_DIR = os.path.join(backend_dir, "storage", "uploads")
 
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+
+validate_provider_settings(settings)

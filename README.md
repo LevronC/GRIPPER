@@ -121,6 +121,8 @@ Set production environment variables in Vercel:
 | `SECRET_KEY` | Yes | JWT signing key, at least 32 characters |
 | `EMAIL_BACKEND` + `SMTP_*` | For invitations/reset | `smtp` to enable; default `disabled` makes those endpoints return 503 |
 | `APP_BASE_URL` | With email | Frontend origin used in invitation/reset links |
+| `LLM_PROVIDER` | No | `none` (default) or `subq`. Explanations stay deterministic until this is `subq`, `LLM_EXTERNAL_PROCESSING_ENABLED=true`, and the institution is authorized. See [docs/LLM.md](docs/LLM.md). |
+| `SUBQ_API_KEY` | With SubQ | Server-side only. Never a frontend variable. |
 | `VITE_API_BASE_URL` | No | Defaults to `/api` on Vercel |
 
 Run migrations and create the runtime role as a deploy step (see

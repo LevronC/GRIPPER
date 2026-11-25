@@ -102,7 +102,7 @@ export const enhanceCards = [
   },
   {
     title: 'Explanations on every alert',
-    body: 'Open any violation to see the rule, the values that breached it, and related passages from your research library, labelled as a rule-based explanation.',
+    body: 'Open any violation to see the rule, the values that breached it, and related passages from your research library. The explanation is labelled rule-based, or AI-assisted when external processing is authorized.',
   },
   {
     title: 'Built for student-managed funds',

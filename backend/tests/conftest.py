@@ -20,6 +20,13 @@ os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
 # Deterministic, clearly non-semantic vectors in their own embedding space (see
 # app/services/embeddings/generator.py). Tests that exercise real models opt in.
 os.environ.setdefault("EMBEDDING_PROVIDER", "hash_test")
+# Explanations stay deterministic in the suite. A developer shell that has SubQ
+# configured must not leak into tests or make a live call.
+os.environ["LLM_PROVIDER"] = "none"
+os.environ["LLM_EXTERNAL_PROCESSING_ENABLED"] = "false"
+os.environ["SUBQ_API_KEY"] = ""
+os.environ.setdefault("SUBQ_BASE_URL", "https://api.subq.ai/v1")
+os.environ.setdefault("SUBQ_MODEL", "subq-savant-1.4")
 
 from app.main import app  # noqa: E402
 from app import models  # noqa: E402

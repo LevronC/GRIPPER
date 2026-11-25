@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased] — portfolio-hardening (Phase 3)
+
+### Added
+- Optional SubQ Savant explanations behind `LLM_PROVIDER=none` by default.
+  Deterministic policy sentences stay authoritative. Model output is schema-checked
+  and citations are resolved from the institution's retrieved chunks. See docs/LLM.md.
+
 ## [Unreleased] — portfolio-hardening (Phase 1)
 
 ### Security

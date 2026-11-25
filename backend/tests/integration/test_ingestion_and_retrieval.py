@@ -216,7 +216,16 @@ def test_health_reports_capabilities(api, monkeypatch):
     monkeypatch.setenv("EMBEDDING_PROVIDER", "none")
     caps = api.get("/health").json()["capabilities"]
     assert caps["semantic_search"] is False and caps["retrieval_mode"] == "full_text_only" and caps["embedding"] is None
-    assert set(caps) == {"semantic_search", "retrieval_mode", "embedding", "ingestion_mode", "email_delivery"}  # no secrets
+    assert set(caps) == {
+        "semantic_search", "retrieval_mode", "embedding", "ingestion_mode", "email_delivery", "llm",
+    }
+    assert caps["llm"] == {
+        "provider": "none",
+        "external_processing_enabled": False,
+        "model": None,
+        "credentials_configured": False,
+        "live_generation": "unverified",
+    }
 
 
 def test_upload_endpoint_end_to_end(api, owner_engine, two_tenants, tmp_path, monkeypatch):

@@ -14,6 +14,11 @@ class Institution(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     slug: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     tier: Mapped[str] = mapped_column(String(50), server_default="free") # free, enterprise
+    # Operator-set. The runtime role can read this and cannot update institutions.
+    # External explanation calls also require the deployment flags in docs/LLM.md.
+    external_processing_authorized: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=text("TIMEZONE('utc', NOW())"))
 
     # Relationships

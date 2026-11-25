@@ -39,6 +39,16 @@ MIGRATION_DATABASE_URL=... EMBEDDING_PROVIDER=local python scripts/reembed.py --
 
 Take a backup first. Re-embedding production data is an operator decision.
 
+## Explanations
+
+`LLM_PROVIDER` defaults to `none`. Nothing in the explanation path calls a model
+until an operator sets `subq`, turns on `LLM_EXTERNAL_PROCESSING_ENABLED`, and
+authorizes that institution (`scripts/set_external_processing.py`). The SubQ
+call is stateless Chat Completions to `api.subq.ai` only. Live access to
+`subq-savant-1.4` is **unverified** (early access; no key was used). Details,
+including what is transmitted and what SubQ's public retention terms say, are
+in [LLM.md](LLM.md).
+
 ## Ingestion lifecycle and retention
 
 `pending → processing → processed | failed | duplicate`

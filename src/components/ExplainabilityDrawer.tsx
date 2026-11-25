@@ -21,7 +21,9 @@ interface ExplanationResult {
   violation_status: 'open' | 'resolved';
   research_status: 'found' | 'none' | 'unavailable';
   explanation: string;
-  explanation_source: 'template';
+  explanation_source: 'template' | 'llm';
+  fallback_reason: string | null;
+  citations?: { chunk_id: string }[];
   evidence: Evidence[];
 }
 
@@ -202,12 +204,24 @@ export default function ExplainabilityDrawer({ violation, institutionId, onClose
                       </div>
                     </div>
 
-                    {/* Rule-based explanation (fixed template, no language model) */}
+                    {/* Policy text is deterministic. Commentary is model-written only when source is llm. */}
                     <div className="p-5 bg-slate-900 border border-slate-800 rounded-2xl space-y-3">
                       <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400 uppercase tracking-wider">
                         <ListChecks size={12} />
-                        Rule-based explanation
+                        {result.explanation_source === 'llm' ? 'AI-assisted explanation' : 'Rule-based explanation'}
                       </div>
+                      {result.explanation_source === 'llm' ? (
+                        <p className="text-xs text-slate-500 leading-relaxed">
+                          Commentary was generated from the rule result and retrieved excerpts.
+                          Cited passages were checked against your institution&apos;s research.
+                          This does not change the compliance result.
+                        </p>
+                      ) : result.fallback_reason ? (
+                        <p className="text-xs text-slate-500 leading-relaxed">
+                          An AI explanation was not available, so this is the rule-based text.
+                          The compliance result is unchanged.
+                        </p>
+                      ) : null}
                       <p className="text-sm text-slate-200 leading-relaxed">
                         {result.explanation}
                       </p>
@@ -232,8 +246,13 @@ export default function ExplainabilityDrawer({ violation, institutionId, onClose
                                   <FileText size={12} />
                                   {ev.company} ({ev.sector})
                                 </span>
-                                <span className="bg-slate-800 text-slate-400 px-2 py-0.5 rounded font-mono">
-                                  {ev.page != null ? `Page ${ev.page}` : 'Page n/a'}
+                                <span className="flex items-center gap-2">
+                                  {(result.citations ?? []).some((c) => c.chunk_id === ev.chunk_id) && (
+                                    <span className="bg-blue-500/10 text-blue-300 px-2 py-0.5 rounded">Cited</span>
+                                  )}
+                                  <span className="bg-slate-800 text-slate-400 px-2 py-0.5 rounded font-mono">
+                                    {ev.page != null ? `Page ${ev.page}` : 'Page n/a'}
+                                  </span>
                                 </span>
                               </div>
                               <p className="text-xs text-slate-400 leading-relaxed font-mono whitespace-pre-line bg-slate-950/50 p-2.5 rounded border border-slate-850">

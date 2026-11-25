@@ -137,6 +137,7 @@ def health_check():
     from app.api.endpoints import ingestion_mode
     from app.core.email import email_delivery_available
     from app.services.embeddings.generator import active_space
+    from app.services.llm.config import public_llm_status
 
     space = active_space()
     return {
@@ -148,6 +149,7 @@ def health_check():
             "embedding": space.public() if space else None,
             "ingestion_mode": ingestion_mode(),
             "email_delivery": email_delivery_available(),
+            "llm": public_llm_status(),
         },
     }
 
@@ -191,6 +193,7 @@ def _institution_json(i: models.Institution) -> dict:
         "name": i.name,
         "slug": i.slug,
         "tier": i.tier,
+        "external_processing_authorized": bool(i.external_processing_authorized),
         "created_at": i.created_at,
     }
 

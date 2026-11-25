@@ -77,5 +77,12 @@ Compliance outcomes come only from active rules and saved holdings. They are una
 research documents, embedding-provider availability, retrieval results, or explanation failures
 (`test_compliance_unaffected_by_research_embeddings_or_explanation_failure`). Explanations are
 rendered by a fixed template from deterministic facts (`ExplanationFacts` →
-`render_template_explanation`). Research is reported as context and never approves, exempts or
-resolves a violation. There is no exception-approval workflow.
+`render_template_explanation`). When `LLM_PROVIDER=subq`, external processing is
+enabled, and the institution has been authorized, a SubQ Savant call may add
+commentary about the retrieved excerpts. That commentary is checked locally
+(schema, citations, no status-changing phrases). If the check fails, the template
+is returned unchanged. The model cannot write `governance_events` and cannot
+change `violation_status`. Research is reported as context and never approves,
+exempts or resolves a violation. There is no exception-approval workflow.
+Citation checks are not a claim that the prose is factually grounded. See
+[LLM.md](LLM.md).

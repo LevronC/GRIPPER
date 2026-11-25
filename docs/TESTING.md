@@ -34,6 +34,7 @@ they **fail** instead, so CI can never pass silently without infrastructure.
 | `test_role_safety_and_worker.py` | The API refuses to serve with a privileged runtime role; worker jobs cannot touch another tenant's report |
 | `test_auth_flows.py` | Invitations (expiry, reuse, revocation, wrong email, manipulated institution/role), login, password reset (expiry, reuse, newest-only, rate limits, session revocation), logout revocation, tokens never logged, demo-seed guards |
 | `test_compliance_workflow.py` | End-to-end rule → portfolio → holdings → evaluation → violation → research → explanation, seeded demo yields its documented violations, rule API validation/authorization, research never changes a violation, determinism |
+| `test_llm_explanations.py` | Explanation endpoint with SubQ mocked: default path makes no external call; an authorized call keeps the deterministic figures and server-side citation metadata; an unknown citation is discarded |
 | `test_ingestion_and_retrieval.py` | Ingestion lifecycle (success, failure keeps the file, retry, duplicates, empty PDFs, idempotent re-runs), provider-down degradation to full text, embedding-space isolation, upload API, real Redis + RQ worker |
 
 ## Embedding tests
@@ -47,6 +48,7 @@ never retrieval *quality*.
 |---|---|---|
 | Chunk-size bounds vs the real BGE tokenizer (`test_chunker.py`) | `tokenizers` + vendored `tests/fixtures/bge-small-en-v1.5.tokenizer.json` (revision `5c38ec7c…`, MIT) | yes, offline |
 | Hugging Face client (`test_embeddings.py::test_hf_*`) | nothing (HTTP is mocked) | yes; **mock-tested only**: no authenticated live call has been made |
+| SubQ client (`test_llm.py`) | nothing (HTTP is mocked) | yes; **mock-tested only**. `scripts/llm_preflight.py` is the opt-in live check |
 | Real model semantics (`-m model`) | `sentence-transformers` + torch + model download | only via the manual `model-tests` job (`workflow_dispatch`, `run_model_tests=true`) |
 
 Run the model suite locally:
@@ -64,6 +66,7 @@ tokenizers 0.23.3, torch 2.15.0, model `BAAI/bge-small-en-v1.5` revision
 ## Not covered by automated tests
 
 * Hugging Face API with a real key (the client is tested against mocked responses).
+* SubQ with a real key (`tests/test_llm.py` mocks HTTP). `scripts/llm_preflight.py` is the opt-in live check; it has not been run against an account.
 * Vercel Blob storage (local-disk storage is used in tests).
 * SMTP delivery (the `memory` backend is used; the SMTP code path is untested).
 * Browser-level UI behaviour.

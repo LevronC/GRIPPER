@@ -1,13 +1,15 @@
 """
-Violation explanations (rule-based template + retrieved research for context).
+Violation explanations (deterministic facts, optional grounded commentary).
 
 Separation of concerns:
   1. Compliance status comes ONLY from the deterministic evaluator (governance_events).
   2. Research retrieval finds potentially relevant documents. It never approves,
      exempts, resolves, or otherwise changes a violation. Gripper has no formal
      exception-approval workflow, and this module must not imply one.
-  3. The explanation text is produced by a fixed template (no language model), and the
-     response says so via `explanation_source: "template"`.
+  3. The policy sentences are a fixed template. A language model may add commentary
+     about the retrieved excerpts only when external processing is authorized.
+     Invalid model output is discarded and the template is returned instead.
+     The response says which path was used via `explanation_source`.
 """
 
 from __future__ import annotations
@@ -20,7 +22,8 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import GovernanceEvent, IPSRule
+from app.models import GovernanceEvent, IPSRule, Institution
+from app.services.llm.grounding import maybe_explain
 from app.services.retrieval.searcher import hybrid_search
 
 logger = logging.getLogger(__name__)
@@ -81,8 +84,8 @@ class ExplanationFacts:
     rule_scope: Optional[str] = None
 
 
-def render_template_explanation(f: ExplanationFacts) -> str:
-    """Pure function: deterministic text from facts."""
+def render_policy_explanation(f: ExplanationFacts) -> str:
+    """Deterministic policy sentences. A model is not allowed to replace these."""
     lines = [describe_violation(f.event_type, f.details)]
     if f.rule_scope:
         lines.append(f"The rule is scoped to {f.rule_scope}.")
@@ -97,18 +100,23 @@ def render_template_explanation(f: ExplanationFacts) -> str:
             "This violation was resolved because the rule was deactivated." if reason == "rule_inactive"
             else "This violation was resolved by a later evaluation."
         )
+    return " ".join(lines)
+
+
+def render_template_explanation(f: ExplanationFacts) -> str:
+    """Pure function: deterministic text from facts."""
     if f.research_status == "found":
-        lines.append(
+        research = (
             f"{f.evidence_count} research excerpt(s) from your institution"
             + (f" ({', '.join(f.evidence_companies)})" if f.evidence_companies else "")
             + " matched a search for related context. They are shown for review; their relevance "
               "has not been verified."
         )
     elif f.research_status == "none":
-        lines.append("No research documents in your institution matched this violation.")
+        research = "No research documents in your institution matched this violation."
     else:
-        lines.append("Research search was unavailable, so no supporting documents were retrieved.")
-    return " ".join(lines)
+        research = "Research search was unavailable, so no supporting documents were retrieved."
+    return f"{render_policy_explanation(f)} {research}"
 
 
 def generate_violation_explanation(
@@ -160,6 +168,19 @@ def generate_violation_explanation(
         evidence_count=len(evidence),
         rule_scope=rule.scope if rule else None,
     )
+    # Template first, and outside the model call, so a renderer failure still surfaces
+    # and a model failure cannot replace the policy sentences.
+    template = render_template_explanation(facts)
+    institution = db.get(Institution, institution_id)
+    llm = maybe_explain(
+        institution_authorized=bool(institution and institution.external_processing_authorized),
+        violation_status=violation_status,
+        policy_text=render_policy_explanation(facts),
+        details=details,
+        retrieval_mode=retrieval_mode,
+        evidence=evidence,
+        institution_id=str(institution_id),
+    )
     return {
         "event_id": str(event.id),
         "event_type": event.event_type,
@@ -175,8 +196,15 @@ def generate_violation_explanation(
             # Threshold that applied when the event was last evaluated (not necessarily current).
             "threshold_at_evaluation": details.get("threshold"),
         },
-        "explanation": render_template_explanation(facts),
-        "explanation_source": "template",
+        "explanation": llm.text or template,
+        "explanation_source": "llm" if llm.text else "template",
+        "fallback_reason": None if llm.text else llm.fallback_reason,
+        "citations": llm.citations if llm.text else [],
+        "llm": {
+            "provider": "subq" if llm.attempted or llm.model else "none",
+            "attempted": llm.attempted,
+            "model": llm.model,
+        },
         "search_query": query,
         "retrieval_mode": retrieval_mode,
         "evidence": evidence,
