@@ -78,7 +78,7 @@ export function PhoneMockup() {
       <div className="rounded-[2.5rem] border border-white/10 bg-surface-elevated p-3 shadow-2xl shadow-black/40">
         <div className="overflow-hidden rounded-[2rem] bg-canvas">
           <div className="flex items-center justify-between px-5 py-3 text-xs text-ink-muted">
-            <span>Live</span>
+            <span>Illustrative</span>
             <span className="font-medium text-ink">
               GRIPPER<span className="text-accent">.terminal</span>
             </span>
@@ -87,8 +87,8 @@ export function PhoneMockup() {
           <div className="space-y-4 px-5 pb-8 pt-2 text-left">
             <div className="grid grid-cols-2 gap-2">
               {[
-                { label: 'Net Asset Value', value: '$4.28M', change: '+12.4%' },
-                { label: 'Risk Exposure', value: '32.4%', change: '-2.1%' },
+                { label: 'Open violations', value: '2', change: '1 critical' },
+                { label: 'Allocated weight', value: '93.0%', change: '11 holdings' },
               ].map((stat) => (
                 <div key={stat.label} className="rounded-xl border border-white/5 bg-white/5 p-3">
                   <p className="text-[10px] uppercase tracking-wide text-ink-muted">{stat.label}</p>
@@ -101,13 +101,13 @@ export function PhoneMockup() {
             <div className="rounded-xl border border-red-400/20 bg-red-400/10 p-3">
               <p className="text-[10px] uppercase tracking-wide text-red-300">Open violation</p>
               <p className="mt-1 text-sm font-medium text-ink">Sector exposure cap — Technology</p>
-              <p className="mt-1 text-xs text-ink-muted">34.2% vs 30% IPS limit</p>
+              <p className="mt-1 text-xs text-ink-muted">34.2% vs 30.0% limit</p>
             </div>
 
             <div className="rounded-xl border border-white/5 bg-white/5 p-3">
-              <p className="text-[10px] uppercase tracking-wide text-accent">Research citation</p>
+              <p className="text-[10px] uppercase tracking-wide text-accent">Related research</p>
               <p className="mt-1 text-xs leading-relaxed text-ink-muted">
-                CapEx guidance suggests increased infrastructure spend — see Axiom Dynamics memo, p. 12.
+                Synthetic research note on capital expenditure guidance, p. 12.
               </p>
             </div>
 

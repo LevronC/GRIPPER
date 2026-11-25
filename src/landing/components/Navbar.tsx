@@ -7,6 +7,13 @@ export function Navbar() {
   const [scrolled, setScrolled] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const location = useLocation()
+  // Close the mobile menu on navigation. Adjusting state during render when a value
+  // changes is React's recommended alternative to a setState-in-effect.
+  const [menuPath, setMenuPath] = useState(location.pathname)
+  if (menuPath !== location.pathname) {
+    setMenuPath(location.pathname)
+    setMenuOpen(false)
+  }
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 12)
@@ -14,10 +21,6 @@ export function Navbar() {
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
-
-  useEffect(() => {
-    setMenuOpen(false)
-  }, [location.pathname])
 
   const homeHref = routes.home
 

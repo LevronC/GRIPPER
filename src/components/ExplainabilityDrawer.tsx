@@ -101,7 +101,7 @@ export default function ExplainabilityDrawer({ violation, institutionId, onClose
                   <ShieldAlert size={20} />
                 </div>
                 <div>
-                  <h3 className="font-bold text-lg tracking-tight">Compliance Justification</h3>
+                  <h3 className="font-bold text-lg tracking-tight">Violation details</h3>
                   <p className="text-xs text-slate-400 font-medium">Violation explanation</p>
                 </div>
               </div>

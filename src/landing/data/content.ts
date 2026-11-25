@@ -22,66 +22,66 @@ export const productTabs = [
     id: 'governance',
     label: 'IPS Governance',
     title: 'Catch policy breaches before the boardroom does',
-    body: 'Deterministic rules engine for single-position caps, sector exposure limits, and liquidity constraints — evaluated continuously against live holdings.',
+    body: 'Deterministic rules engine for single-position caps, sector exposure limits, and liquidity constraints — evaluated on demand against saved or hypothetical holdings.',
   },
   {
     id: 'rag',
     label: 'Research RAG',
     title: 'Search analyst memos with semantic precision',
-    body: 'Upload PDF research, chunk and embed it with pgvector, then ask questions about CapEx, risk factors, or guidance with citations from your own documents.',
+    body: 'Upload PDF research, then search it by meaning and keyword (pgvector plus PostgreSQL full-text, fused with Reciprocal Rank Fusion). Results show the source document and page.',
   },
   {
     id: 'monitoring',
     label: 'Portfolio Monitoring',
-    title: 'Live holdings with violation tracking',
-    body: 'Track NAV, risk exposure, alpha signals, and open compliance alerts in a single dashboard built for high-stress review sessions.',
+    title: 'Holdings with violation tracking',
+    body: 'Track holdings, allocated weight, and open and resolved compliance violations in one dashboard, and test hypothetical trades before committing them.',
   },
   {
     id: 'tenancy',
     label: 'Multi-Tenant RLS',
     title: 'True isolation between institutions',
-    body: 'PostgreSQL Row-Level Security keeps Stetson, UF, and every cohort separated at the database layer — not just in application code.',
+    body: 'Every institution\'s data is isolated twice: by ownership checks in application code and independently by PostgreSQL Row-Level Security, through a database role that cannot bypass it.',
   },
   {
     id: 'ingestion',
     label: 'Async Ingestion',
     title: 'Upload once, process in the background',
-    body: 'Redis-backed workers parse, chunk, and embed documents asynchronously so uploads never block your research workflow.',
+    body: 'Redis-backed workers parse, chunk, and embed documents asynchronously where a worker is available; failed uploads are kept and can be retried.',
   },
 ]
 
 export const featureBlocks = [
   {
     accent: true,
-    title: 'Every violation comes with a cited explanation',
-    body: 'When a portfolio breaches IPS limits, GRIPPER generates compliance alerts backed by passages from your uploaded research — so analysts can defend decisions with evidence, not guesswork.',
-    cta: 'See explainability',
+    title: 'Every violation comes with related research',
+    body: 'When a portfolio breaches IPS limits, GRIPPER states the breach in plain terms and surfaces related passages from your uploaded research, with document and page, for analysts to review. Research never changes a violation\'s status.',
+    cta: 'See explanations',
     previewTags: ['Violations', 'Citations', 'IPS'],
     previewItems: [
       {
         label: 'Sector exposure alert',
-        text: 'Technology weight is 34.2%, exceeding the 30% IPS limit. See memo excerpt on CapEx-driven concentration risk.',
+        text: 'Technology exposure is 34.2%; the sector limit is 30.0%. This violation is open. (Illustrative example.)',
       },
       {
         label: 'Research citation',
-        text: '“Fiscal 2027 CapEx of $1.8B for distributed inference pipelines increases infrastructure concentration…” — Axiom Dynamics 10-K, p. 12.',
+        text: '“Capital expenditure guidance implies higher infrastructure concentration…” — synthetic research note, p. 12.',
       },
     ],
   },
   {
     accent: false,
     title: 'Bridge structured portfolios with unstructured research',
-    body: 'GRIPPER connects holdings data, governance rules, and analyst documents in one pipeline — from PDF ingestion through vector search to automated reconciliation of resolved violations.',
+    body: 'GRIPPER connects holdings data, governance rules, and analyst documents in one pipeline — from PDF ingestion through hybrid search to reconciliation of resolved violations on each evaluation.',
     cta: 'Explore the pipeline',
     previewTags: ['Ingest', 'Search', 'Reconcile'],
     previewItems: [
       {
         label: 'Semantic query',
-        text: 'Ask: “What did we write about regulatory review risk in Q3?” — results ranked by similarity with page references.',
+        text: 'Search: “regulatory review risk” — matching passages ranked by Reciprocal Rank Fusion, with page references.',
       },
       {
         label: 'Compliance reconciler',
-        text: 'Resolved violations are archived automatically while preserving a full audit trail for program review.',
+        text: 'Violations that no longer apply are marked resolved on the next evaluation, and kept in the history.',
       },
     ],
   },
@@ -89,24 +89,24 @@ export const featureBlocks = [
 
 export const enhanceCards = [
   {
-    title: 'Upload research PDFs in seconds',
-    body: 'Magic-byte validation, clean semantic chunking, and async embedding — your memos become searchable without manual tagging.',
+    title: 'Upload research PDFs',
+    body: 'PDF signature and size validation, page-preserving chunking, and embedding when a provider is configured; memos become searchable without manual tagging.',
   },
   {
     title: 'Automated IPS rule evaluation',
-    body: 'Single-position caps, sector limits, and micro-cap liquidity rules run deterministically against every portfolio update.',
+    body: 'Single-position caps, sector limits, and micro-cap liquidity rules run deterministically whenever a portfolio is evaluated or a scenario is simulated.',
   },
   {
     title: 'Institution-scoped workspaces',
-    body: 'Each cohort gets its own isolated tenant with role-based access, preserving proprietary thesis documents between programs.',
+    body: 'Each institution is its own isolated tenant with role-based access and invitation-only membership.',
   },
   {
-    title: 'Explainability on every alert',
-    body: 'Open the drawer on any violation to see severity, rule type, and RAG-backed justification pulled from your research library.',
+    title: 'Explanations on every alert',
+    body: 'Open any violation to see the rule, the values that breached it, and related passages from your research library, labelled as a rule-based explanation.',
   },
   {
-    title: 'Built for RGIP-style programs',
-    body: 'Designed for Roland George Investments Program boardroom gauntlets and student-managed equity research workflows.',
+    title: 'Built for student-managed funds',
+    body: 'Designed for student-managed investment funds and similar research teams that operate under an investment policy statement.',
   },
   {
     title: 'Audit-ready violation history',
@@ -123,7 +123,7 @@ export const proTier = {
   perks: [
     {
       title: 'PostgreSQL Row-Level Security',
-      body: 'Session-scoped tenant isolation enforced at the database engine — data leakage between institutions is structurally impossible.',
+      body: 'Transaction-scoped tenant context enforced by the database, in addition to application-level ownership checks, and verified by integration tests that use the restricted runtime role.',
     },
     {
       title: 'pgvector semantic search',
@@ -163,7 +163,7 @@ export const trustGrid = {
       icon: 'lock',
     },
     {
-      title: 'Role-based authentication with secure token handling and verification flows.',
+      title: 'Role-based access, invitation-only accounts, and single-use, expiring password-reset links.',
       icon: 'key',
     },
     {
@@ -195,7 +195,7 @@ export const footerColumns: { title: string; links: FooterLink[] }[] = [
     links: [
       { label: 'Multi-Tenant RLS', href: '/#institutions' },
       { label: 'Cohort Workspaces', href: '/#institutions' },
-      { label: 'RGIP Programs', href: '/#workflow' },
+      { label: 'Student-managed funds', href: '/#workflow' },
       { label: 'Documentation', href: '/docs' },
       { label: 'Open Terminal', href: '/app?mode=login' },
     ],
