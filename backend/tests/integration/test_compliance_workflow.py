@@ -14,7 +14,8 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
-from tests.integration.conftest import _vec_literal, fake_vector
+from app.services.embeddings.generator import _hash_embed
+from tests.integration.conftest import _vec_literal
 
 pytestmark = pytest.mark.integration
 
@@ -48,10 +49,11 @@ def _seed_research(owner_engine, institution_id, company, content):
             {"r": rid, "i": institution_id, "c": company},
         )
         conn.execute(
-            text("INSERT INTO document_chunks (id, institution_id, report_id, content, embedding, metadata_json, created_at) "
-                 "VALUES (:c, :i, :r, :t, CAST(:e AS vector), CAST(:m AS json), now())"),
+            text("INSERT INTO document_chunks (id, institution_id, report_id, content, embedding, embedding_model, "
+                 "embedding_provider, metadata_json, created_at) VALUES (:c, :i, :r, :t, CAST(:e AS vector), "
+                 "'hash-test-v1@384', 'hash_test', CAST(:m AS json), now())"),
             {"c": cid, "i": institution_id, "r": rid, "t": content,
-             "e": _vec_literal(fake_vector(content)), "m": '{"page": 3}'},
+             "e": _vec_literal(_hash_embed(content)), "m": '{"page": 3}'},
         )
     return rid, cid
 

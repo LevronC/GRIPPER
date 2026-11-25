@@ -351,8 +351,8 @@ def explain_violation(
 
 class HoldingSimulation(BaseModel):
     ticker: str = Field(..., pattern=r"^[A-Za-z0-9.\-]{1,12}$")
-    weight: float = Field(..., ge=0.0, le=1.0)
-    cost_basis: Optional[float] = Field(100.0, ge=0.0)
+    weight: float = Field(..., ge=0.0, le=1.0, allow_inf_nan=False)
+    cost_basis: Optional[float] = Field(100.0, ge=0.0, allow_inf_nan=False)
     conviction_score: Optional[int] = Field(None, ge=1, le=10)
 
 

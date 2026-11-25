@@ -127,8 +127,8 @@ def test_composite_fk_blocks_cross_tenant_parent_even_for_owner(owner_engine, tw
     with pytest.raises(DBAPIError, match="fk_document_chunks_report_tenant"):
         with owner_engine.begin() as conn:
             conn.execute(
-                text("INSERT INTO document_chunks (id, institution_id, report_id, content, embedding, created_at) "
-                     "VALUES (:c, :i, :r, 'x', CAST(:v AS vector), now())"),
+                text("INSERT INTO document_chunks (id, institution_id, report_id, content, embedding, embedding_model, created_at) "
+                     "VALUES (:c, :i, :r, 'x', CAST(:v AS vector), 'hash-test-v1@384', now())"),
                 {"c": uuid.uuid4(), "i": a.institution_id, "r": b.report_id, "v": "[" + ",".join(["0"] * 384) + "]"},
             )
 

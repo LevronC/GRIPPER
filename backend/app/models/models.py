@@ -145,7 +145,10 @@ class IPSRule(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     institution_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("institutions.id", ondelete="CASCADE"), nullable=False)
-    rule_type: Mapped[str] = mapped_column(String(100), nullable=False) # single_position_cap, sector_exposure_cap, etc.
+    rule_type: Mapped[str] = mapped_column(String(100), nullable=False) # single_position_cap, sector_exposure_cap, liquidity_constraint
+    # NULL = applies to all positions / all sectors. A ticker (single_position_cap) or a
+    # sector name (sector_exposure_cap) narrows the rule. liquidity_constraint is unscoped.
+    scope: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     threshold: Mapped[float] = mapped_column(Float, nullable=False)
     severity: Mapped[str] = mapped_column(String(50), default="warning") # warning, critical
     active: Mapped[bool] = mapped_column(Boolean, default=True)

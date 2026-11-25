@@ -310,9 +310,10 @@ def test_reset_unavailable_without_email(client, monkeypatch):
     assert r.status_code == 503
 
 
-def test_weak_password_rejected(client):
+def test_weak_password_rejected_without_echoing_it(client):
     r = client.post("/auth/password-reset/confirm", json={"token": "z" * 43, "new_password": "short"})
     assert r.status_code == 422
+    assert "short" not in r.text and "z" * 43 not in r.text  # rejected secrets are not echoed back
 
 
 def test_memory_email_backend_refused_outside_test(monkeypatch):

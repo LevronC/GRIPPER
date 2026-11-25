@@ -14,12 +14,13 @@ from __future__ import annotations
 
 import logging
 import uuid
-from typing import Any, Dict, List
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import GovernanceEvent
+from app.models import GovernanceEvent, IPSRule
 from app.services.retrieval.searcher import hybrid_search
 
 logger = logging.getLogger(__name__)
@@ -44,6 +45,10 @@ def describe_violation(event_type: str, details: Dict[str, Any]) -> str:
     if event_type == "liquidity_constraint":
         tickers = ", ".join(details.get("tickers") or []) or "micro-cap holdings"
         return f"Micro-cap holdings ({tickers}) total {current}; the liquidity limit is {limit}."
+    if event_type == "insufficient_data":
+        tickers = ", ".join(details.get("tickers") or [])
+        return (f"The {details.get('rule_type', 'rule')} rule could not be fully evaluated: {tickers} "
+                "has no classification in Gripper's reference data, so compliance is not established for it.")
     return details.get("message") or "An investment policy rule is breached."
 
 
@@ -55,7 +60,55 @@ def research_query(event_type: str, details: Dict[str, Any]) -> str:
         return f"{details.get('sector', '')} sector outlook exposure risk"
     if event_type == "liquidity_constraint":
         return "micro-cap liquidity risk trading volume"
+    if event_type == "insufficient_data":
+        return " ".join(details.get("tickers") or []) + " company profile sector"
     return "portfolio investment policy risk"
+
+
+@dataclass(frozen=True)
+class ExplanationFacts:
+    """
+    Everything an explanation may state, computed deterministically. A renderer turns
+    facts into text; it cannot change them. A future model-based renderer must take
+    exactly these facts (plus the evidence passages) and nothing that can alter status.
+    """
+    event_type: str
+    details: Dict[str, Any]
+    violation_status: str      # open | resolved (from the evaluator only)
+    research_status: str       # found | none | unavailable
+    evidence_companies: List[str]
+    evidence_count: int
+    rule_scope: Optional[str] = None
+
+
+def render_template_explanation(f: ExplanationFacts) -> str:
+    """Pure function: deterministic text from facts."""
+    lines = [describe_violation(f.event_type, f.details)]
+    if f.rule_scope:
+        lines.append(f"The rule is scoped to {f.rule_scope}.")
+    if f.violation_status == "open":
+        lines.append(
+            "This violation is open. It stays open until the holdings or the rule change and the "
+            "portfolio is re-evaluated; retrieved research does not approve, exempt, or resolve it."
+        )
+    else:
+        reason = f.details.get("resolution")
+        lines.append(
+            "This violation was resolved because the rule was deactivated." if reason == "rule_inactive"
+            else "This violation was resolved by a later evaluation."
+        )
+    if f.research_status == "found":
+        lines.append(
+            f"{f.evidence_count} research excerpt(s) from your institution"
+            + (f" ({', '.join(f.evidence_companies)})" if f.evidence_companies else "")
+            + " matched a search for related context. They are shown for review; their relevance "
+              "has not been verified."
+        )
+    elif f.research_status == "none":
+        lines.append("No research documents in your institution matched this violation.")
+    else:
+        lines.append("Research search was unavailable, so no supporting documents were retrieved.")
+    return " ".join(lines)
 
 
 def generate_violation_explanation(
@@ -96,27 +149,16 @@ def generate_violation_explanation(
         logger.warning("Research retrieval failed for event %s (%s)", event_id, type(exc).__name__)
         research_status = "unavailable"
 
-    lines = [describe_violation(event.event_type, details)]
-    if violation_status == "open":
-        lines.append(
-            "This violation is open. It stays open until the holdings or the rule change and the "
-            "portfolio is re-evaluated; retrieved research does not approve, exempt, or resolve it."
-        )
-    else:
-        lines.append("This violation was resolved by a later evaluation.")
-    if research_status == "found":
-        companies = sorted({e["company"] for e in evidence if e.get("company")})
-        lines.append(
-            f"{len(evidence)} research excerpt(s) from your institution"
-            + (f" ({', '.join(companies)})" if companies else "")
-            + " matched a search for related context. They are shown for review; their relevance "
-              "has not been verified."
-        )
-    elif research_status == "none":
-        lines.append("No research documents in your institution matched this violation.")
-    else:
-        lines.append("Research search was unavailable, so no supporting documents were retrieved.")
-
+    rule = db.get(IPSRule, event.rule_id) if event.rule_id else None
+    facts = ExplanationFacts(
+        event_type=event.event_type,
+        details=details,
+        violation_status=violation_status,
+        research_status=research_status,
+        evidence_companies=sorted({e["company"] for e in evidence if e.get("company")}),
+        evidence_count=len(evidence),
+        rule_scope=rule.scope if rule else None,
+    )
     return {
         "event_id": str(event.id),
         "event_type": event.event_type,
@@ -124,7 +166,15 @@ def generate_violation_explanation(
         "message": details.get("message"),
         "violation_status": violation_status,
         "research_status": research_status,
-        "explanation": " ".join(lines),
+        "policy": {
+            "rule_id": str(rule.id) if rule else None,
+            "rule_type": rule.rule_type if rule else None,
+            "scope": rule.scope if rule else None,
+            "rule_active": rule.active if rule else False,
+            # Threshold that applied when the event was last evaluated (not necessarily current).
+            "threshold_at_evaluation": details.get("threshold"),
+        },
+        "explanation": render_template_explanation(facts),
         "explanation_source": "template",
         "search_query": query,
         "retrieval_mode": retrieval_mode,

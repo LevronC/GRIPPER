@@ -1,171 +1,140 @@
-import uuid
-from datetime import datetime
-import logging
-from typing import List, Dict, Any, Optional
-from sqlalchemy.orm import Session
-from sqlalchemy import select, and_
+"""
+Compliance evaluation and violation lifecycle.
 
-from app.models import Portfolio, Holding, IPSRule, GovernanceEvent
-from app.services.governance.rules import (
-    validate_single_position,
-    validate_sector_exposures,
-    validate_liquidity_constraints,
-)
-from app.services.governance.alerts import dispatch_violation_alert, dispatch_resolution_alert
+Lifecycle of a governance event (one row in governance_events):
+  * identity  = (rule_id, event_type, ticker-or-sector). The same breach found again is
+                the same event (same id), even if holdings were re-saved with new row ids.
+  * open      = resolved is False. Its details (current weight, threshold, severity) are
+                refreshed on every evaluation, so an open event shows the latest values.
+  * resolved  = set when an evaluation no longer finds the breach. resolved_at plus
+                details.resolution record why: "no_longer_breached" or "rule_inactive"
+                (rule deactivated or deleted). Resolved events are never modified again.
+  * recurrence = a breach that reappears after resolution creates a NEW event; the
+                resolved one stays in history unchanged.
+
+There are no per-evaluation snapshot records; governance_events is the audit trail.
+"""
+
+import logging
+import uuid
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
+
+from sqlalchemy import and_, select
+from sqlalchemy.orm import Session
+
 from app.core.observability import observe_time
+from app.models import GovernanceEvent, Holding, IPSRule, Portfolio
+from app.services.governance.alerts import dispatch_resolution_alert, dispatch_violation_alert
+from app.services.governance.rules import detect_violations
 
 logger = logging.getLogger(__name__)
+
+_DETAIL_KEYS = ("ticker", "sector", "tickers", "rule_type")
+
+
+def _key(rule_id: Any, event_type: str, details: Dict[str, Any]) -> tuple:
+    return (str(rule_id) if rule_id else "", event_type, details.get("ticker") or details.get("sector") or "")
+
+
+def _details(v: Dict[str, Any]) -> Dict[str, Any]:
+    d = {"message": v["message"]}
+    for k in ("current_weight", "threshold"):
+        if k in v:
+            d[k] = v[k]
+    for k in _DETAIL_KEYS:
+        if k in v:
+            d[k] = v[k]
+    return d
+
+
+def _active_rules(db: Session, institution_id: uuid.UUID) -> List[IPSRule]:
+    return list(db.execute(
+        select(IPSRule).where(and_(IPSRule.institution_id == institution_id, IPSRule.active.is_(True)))
+    ).scalars())
+
+
+def _event_json(e: GovernanceEvent) -> Dict[str, Any]:
+    return {
+        "id": str(e.id),
+        "event_type": e.event_type,
+        "severity": e.severity,
+        "details": e.details_json,
+        "created_at": e.created_at.isoformat() if e.created_at else None,
+    }
+
 
 @observe_time("evaluate_portfolio_compliance")
 def evaluate_portfolio_compliance(
     db: Session,
     portfolio_id: uuid.UUID,
-    institution_id: uuid.UUID
+    institution_id: uuid.UUID,
 ) -> List[Dict[str, Any]]:
-    """
-    Evaluates all active IPS rules for an institution against a portfolio.
-    Reconciles violations with database audit trails.
-    Returns list of active violations.
-    """
-    # 1. Fetch active rules for the institution
-    rules_stmt = select(IPSRule).filter(
-        and_(IPSRule.institution_id == institution_id, IPSRule.active.is_(True))
-    )
-    rules = db.execute(rules_stmt).scalars().all()
-    
-    # 2. Fetch portfolio holdings
-    holdings_stmt = (
+    """Evaluates all active rules, reconciles governance_events, returns the open events."""
+    rules = _active_rules(db, institution_id)
+    holdings = list(db.execute(
         select(Holding)
         .join(Portfolio, Portfolio.id == Holding.portfolio_id)
-        .filter(Holding.portfolio_id == portfolio_id, Portfolio.institution_id == institution_id)
-    )
-    holdings = db.execute(holdings_stmt).scalars().all()
-    
-    if not holdings:
-        logger.info(f"No holdings found for portfolio {portfolio_id}. Compliance pass skipped.")
-        return []
-        
-    detected_violations: List[Dict[str, Any]] = []
-    
-    # Run evaluation logic
-    for rule in rules:
-        if rule.rule_type == "single_position_cap":
-            for h in holdings:
-                violation = validate_single_position(h, rule.threshold)
-                if violation:
-                    violation["rule_id"] = rule.id
-                    violation["holding_id"] = h.id
-                    detected_violations.append(violation)
-                    
-        elif rule.rule_type == "sector_exposure_cap":
-            violations = validate_sector_exposures(holdings, rule.threshold)
-            for v in violations:
-                v["rule_id"] = rule.id
-                detected_violations.append(v)
-                
-        elif rule.rule_type == "liquidity_constraint":
-            violation = validate_liquidity_constraints(holdings, rule.threshold)
-            if violation:
-                violation["rule_id"] = rule.id
-                detected_violations.append(violation)
-                
-    # 3. Retrieve currently active violations from the database
-    active_events_stmt = select(GovernanceEvent).filter(
-        and_(
+        .where(Holding.portfolio_id == portfolio_id, Portfolio.institution_id == institution_id)
+    ).scalars())
+
+    # An empty portfolio is still evaluated, so stale open events get resolved.
+    detected = {_key(v["rule_id"], v["type"], v): v for v in detect_violations(rules, holdings)}
+    open_events = list(db.execute(
+        select(GovernanceEvent).where(
             GovernanceEvent.portfolio_id == portfolio_id,
             GovernanceEvent.institution_id == institution_id,
             GovernanceEvent.resolved.is_(False),
         )
-    )
-    db_active_events = db.execute(active_events_stmt).scalars().all()
-    
-    # Identity of a breach: (rule, type, ticker-or-sector). holding_id is deliberately
-    # NOT part of the key: saving holdings replaces the rows (new ids), and the same
-    # ticker over the same cap is the same ongoing breach, not a new one.
-    def get_event_key(event: Any) -> tuple:
-        details = event.details_json
-        ticker_or_sector = details.get("ticker") or details.get("sector") or ""
-        return (event.rule_id, event.event_type, ticker_or_sector)
+    ).scalars())
+    active_rule_ids = {str(r.id) for r in rules}
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
 
-    def get_violation_key(v: dict) -> tuple:
-        ticker_or_sector = v.get("ticker") or v.get("sector") or ""
-        return (v.get("rule_id"), v["type"], ticker_or_sector)
-        
-    db_active_map = {get_event_key(e): e for e in db_active_events}
-    detected_map = {get_violation_key(v): v for v in detected_violations}
-    
-    # 4. Reconcile
-    now = datetime.utcnow()
-    
-    # - Handle Resolved Violations (Active in DB, but not detected anymore)
-    for key, db_event in db_active_map.items():
-        if key not in detected_map:
-            db_event.resolved = True
-            db_event.resolved_at = now
-            dispatch_resolution_alert(db_event)
-            logger.info("[Governance] Resolved breach: %s on %s", db_event.event_type, key[2])
-            
-    # - Handle Active or New Violations
-    active_results = []
-    for key, v in detected_map.items():
-        if key in db_active_map:
-            # Breach is already known, update details (weights, etc.) if they changed
-            db_event = db_active_map[key]
-            db_event.details_json = {
-                "current_weight": v["current_weight"],
-                "threshold": v["threshold"],
-                "message": v["message"],
-                **({"ticker": v["ticker"]} if "ticker" in v else {}),
-                **({"sector": v["sector"]} if "sector" in v else {}),
-                **({"tickers": v["tickers"]} if "tickers" in v else {})
-            }
-            db_event.severity = v["severity"]
+    results: List[GovernanceEvent] = []
+    seen = set()
+    for event in sorted(open_events, key=lambda e: e.created_at or now):
+        key = _key(event.rule_id, event.event_type, event.details_json or {})
+        if key in detected and key not in seen:
+            seen.add(key)
+            v = detected[key]
+            event.details_json = _details(v)
+            event.severity = v["severity"]
             if v.get("holding_id"):
-                db_event.holding_id = v["holding_id"]
-            active_results.append(db_event)
+                event.holding_id = v["holding_id"]
+            results.append(event)
         else:
-            # Create a new governance breach record
-            new_event = GovernanceEvent(
-                id=uuid.uuid4(),
-                institution_id=institution_id,
-                portfolio_id=portfolio_id,
-                holding_id=v.get("holding_id"),
-                rule_id=v.get("rule_id"),
-                event_type=v["type"],
-                severity=v["severity"],
-                details_json={
-                    "current_weight": v["current_weight"],
-                    "threshold": v["threshold"],
-                    "message": v["message"],
-                    **({"ticker": v["ticker"]} if "ticker" in v else {}),
-                    **({"sector": v["sector"]} if "sector" in v else {}),
-                    **({"tickers": v["tickers"]} if "tickers" in v else {})
-                },
-                resolved=False
-            )
-            db.add(new_event)
-            dispatch_violation_alert(new_event)
-            active_results.append(new_event)
-            logger.warning(f"[Governance] New breach detected: {v['message']}")
-            
-    # Tenant context is re-applied automatically when the next transaction begins
-    # (TenantSession after_begin hook), so reading created_at after commit is safe.
-    db.commit()
+            reason = "no_longer_breached" if key[0] in active_rule_ids else "rule_inactive"
+            event.resolved = True
+            event.resolved_at = now
+            event.details_json = {**(event.details_json or {}), "resolution": reason}
+            dispatch_resolution_alert(event)
+            logger.info("[Governance] Resolved %s (%s)", event.event_type, reason)
 
-    # Format return list
-    return [
-        {
-            "id": str(e.id),
-            "event_type": e.event_type,
-            "severity": e.severity,
-            "details": e.details_json,
-            "created_at": e.created_at.isoformat()
-        }
-        for e in active_results
-    ]
+    for key, v in detected.items():
+        if key in seen:
+            continue
+        event = GovernanceEvent(
+            id=uuid.uuid4(),
+            institution_id=institution_id,
+            portfolio_id=portfolio_id,
+            holding_id=v.get("holding_id"),
+            rule_id=v["rule_id"],
+            event_type=v["type"],
+            severity=v["severity"],
+            details_json=_details(v),
+            resolved=False,
+        )
+        db.add(event)
+        dispatch_violation_alert(event)
+        results.append(event)
+
+    db.commit()  # tenant context is re-applied by the session hook for the reads below
+    return [_event_json(e) for e in sorted(results, key=lambda e: _key(e.rule_id, e.event_type, e.details_json))]
 
 
 class MockHolding:
+    """A hypothetical holding for what-if simulation (never persisted)."""
+
     def __init__(self, ticker: str, weight: float, cost_basis: float = 100.0, conviction_score: Optional[int] = None):
         self.id = uuid.uuid4()
         self.ticker = ticker.upper().strip()
@@ -173,57 +142,22 @@ class MockHolding:
         self.cost_basis = cost_basis
         self.conviction_score = conviction_score
 
+
 def simulate_portfolio_compliance(
     db: Session,
     portfolio_id: uuid.UUID,
     institution_id: uuid.UUID,
-    hypothetical_holdings_data: List[Dict[str, Any]]
+    hypothetical_holdings_data: List[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
-    """
-    Simulates compliance checks against hypothetical holdings without database mutations.
-    """
-    # 1. Fetch active rules
-    rules_stmt = select(IPSRule).filter(
-        and_(IPSRule.institution_id == institution_id, IPSRule.active.is_(True))
-    )
-    rules = db.execute(rules_stmt).scalars().all()
-    
-    # 2. Map payload into mock holdings
+    """Same rule logic as evaluation, against hypothetical holdings, without writes."""
     holdings = [
-        MockHolding(
-            ticker=h["ticker"],
-            weight=h["weight"],
-            cost_basis=h.get("cost_basis", 100.0),
-            conviction_score=h.get("conviction_score")
-        )
+        MockHolding(h["ticker"], h["weight"], h.get("cost_basis", 100.0), h.get("conviction_score"))
         for h in hypothetical_holdings_data
     ]
-    
-    if not holdings:
-        return []
-        
-    detected_violations: List[Dict[str, Any]] = []
-    
-    for rule in rules:
-        if rule.rule_type == "single_position_cap":
-            for h in holdings:
-                violation = validate_single_position(h, rule.threshold)
-                if violation:
-                    violation["rule_id"] = str(rule.id)
-                    violation["holding_id"] = str(h.id)
-                    detected_violations.append(violation)
-                    
-        elif rule.rule_type == "sector_exposure_cap":
-            violations = validate_sector_exposures(holdings, rule.threshold)
-            for v in violations:
-                v["rule_id"] = str(rule.id)
-                detected_violations.append(v)
-                
-        elif rule.rule_type == "liquidity_constraint":
-            violation = validate_liquidity_constraints(holdings, rule.threshold)
-            if violation:
-                violation["rule_id"] = str(rule.id)
-                detected_violations.append(violation)
-                
-    return detected_violations
-
+    out = []
+    for v in detect_violations(_active_rules(db, institution_id), holdings):
+        v = dict(v)
+        v["rule_id"] = str(v["rule_id"])
+        v.pop("holding_id", None)  # random ids for hypothetical rows carry no meaning
+        out.append(v)
+    return out

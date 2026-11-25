@@ -6,7 +6,9 @@ from typing import List, Optional
 
 from fastapi import Body, FastAPI, Depends, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
 from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select, text
 from sqlalchemy.exc import OperationalError
@@ -68,6 +70,20 @@ async def redoc_html():
         openapi_url=SWAGGER_OPENAPI_URL,
         title=f"{app.title} - ReDoc",
     )
+
+
+# ── Validation errors ─────────────────────────────────────────────────────────
+# FastAPI's default 422 body echoes each rejected `input`. That (a) returns submitted
+# secrets such as a rejected password, and (b) crashes with a 500 when the input is a
+# non-finite float (NaN/Infinity cannot be encoded as JSON). Report location and
+# message only.
+@app.exception_handler(RequestValidationError)
+async def validation_error_handler(_request: Request, exc: RequestValidationError) -> JSONResponse:
+    errors = [
+        {"loc": list(e.get("loc", ())), "msg": str(e.get("msg", "")), "type": str(e.get("type", ""))}
+        for e in exc.errors()
+    ]
+    return JSONResponse(status_code=422, content={"detail": errors})
 
 
 # ── Security response headers ─────────────────────────────────────────────────
@@ -259,8 +275,8 @@ def list_portfolio_holdings(
 
 class HoldingUpdate(BaseModel):
     ticker: str = Field(..., pattern=r"^[A-Za-z0-9.\-]{1,12}$")
-    weight: float = Field(..., ge=0.0, le=1.0, description="Portfolio weight as a fraction (0.05 = 5%)")
-    cost_basis: float = Field(..., ge=0.0)
+    weight: float = Field(..., ge=0.0, le=1.0, allow_inf_nan=False, description="Portfolio weight as a fraction (0.05 = 5%)")
+    cost_basis: float = Field(..., ge=0.0, allow_inf_nan=False)
     conviction_score: Optional[int] = Field(None, ge=1, le=10)
 
 
