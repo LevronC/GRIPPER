@@ -81,25 +81,26 @@ def _queries(count: int, seed: int) -> list[str]:
     return [" ".join(rng.choice(VOCAB) for _ in range(4)) for _ in range(count)]
 
 
-def _load(owner_url: str, runtime_url: str, chunks: int, seed: int) -> uuid.UUID:
+def _load(owner_url: str, runtime_url: str, chunks: int, seed: int, tenant_number: int = 0) -> uuid.UUID:
     from app.db.session import make_session_factory, set_tenant
     from app.services.embeddings.generator import _hash_embed, active_space
 
     space = active_space()
     if space is None or space.provider != "hash_test":
         raise SystemExit("benchmark requires EMBEDDING_PROVIDER=hash_test")
-    institution = uuid.uuid5(NAMESPACE, "institution")
+    namespace = NAMESPACE if tenant_number == 0 else uuid.uuid5(NAMESPACE, f"tenant:{tenant_number}")
+    institution = uuid.uuid5(namespace, "institution")
     owner = create_engine(owner_url)
     with owner.begin() as conn:
         conn.execute(text("DELETE FROM institutions WHERE id = :i"), {"i": institution})
         conn.execute(
-            text("INSERT INTO institutions (id, name, slug, tier, created_at) VALUES (:i, 'Synthetic Bench', 'synthetic-bench', 'free', now())"),
-            {"i": institution},
+            text("INSERT INTO institutions (id, name, slug, tier, created_at) VALUES (:i, 'Synthetic Bench', :slug, 'free', now())"),
+            {"i": institution, "slug": f"synthetic-bench-{tenant_number}"},
         )
     owner.dispose()
 
     rng = random.Random(seed)
-    report_id = uuid.uuid5(NAMESPACE, "report")
+    report_id = uuid.uuid5(namespace, "report")
     factory = make_session_factory(runtime_url)
     with factory() as db:
         set_tenant(db, institution)
@@ -116,7 +117,7 @@ def _load(owner_url: str, runtime_url: str, chunks: int, seed: int) -> uuid.UUID
             words = [rng.choice(VOCAB) for _ in range(24)]
             content = f"synthetic benchmark chunk {index} sector {SECTORS[index % len(SECTORS)]} " + " ".join(words)
             batch.append({
-                "c": uuid.uuid5(NAMESPACE, f"chunk:{index}"),
+                "c": uuid.uuid5(namespace, f"chunk:{index}"),
                 "i": institution,
                 "r": report_id,
                 "t": content,

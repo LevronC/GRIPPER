@@ -38,3 +38,8 @@ __pycache__/
 .vercel
 scraped/
 scripts/scrape_robinhood.py
+
+# Phase 4B verification output: raw logs and per-sample data stay local.
+# Only the compact summary is tracked. Earlier eval_results files are unaffected.
+backend/eval_results/phase4b/*
+!backend/eval_results/phase4b/SUMMARY.md
